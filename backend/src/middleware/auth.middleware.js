@@ -3,80 +3,95 @@ const { User } = require('../models');
 const logger = require('../utils/logger');
 
 /**
- * Middleware d'authentification JWT
- * Vérifie la validité du token JWT présent dans les headers
+ * Middleware d'authentification
+ * Vérifie que l'utilisateur est authentifié via un token JWT
  */
 exports.authenticate = async (req, res, next) => {
   try {
     // Récupération du token depuis le header Authorization
     const authHeader = req.headers.authorization;
+    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        message: 'Accès non autorisé. Authentification requise.'
+      return res.status(401).json({ 
+        message: 'Authentification requise',
+        error: 'NO_TOKEN'
       });
     }
     
     // Extraction du token
     const token = authHeader.split(' ')[1];
     
-    // Vérification du token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    // Ajout des informations utilisateur à la requête
-    req.user = decoded;
-    
-    // Vérification que l'utilisateur existe toujours et est actif
-    const user = await User.findByPk(decoded.id);
-    if (!user || !user.active) {
-      return res.status(401).json({
-        message: 'Utilisateur non trouvé ou inactif.'
+    try {
+      // Vérification du token
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      
+      // Vérification que l'utilisateur existe toujours et est actif
+      const user = await User.findByPk(decoded.id);
+      
+      if (!user || !user.active) {
+        return res.status(401).json({ 
+          message: 'Utilisateur invalide ou inactif',
+          error: 'INVALID_USER'
+        });
+      }
+      
+      // Attachement des informations utilisateur à la requête
+      req.user = {
+        id: user.id,
+        email: user.email,
+        role: user.role
+      };
+      
+      next();
+    } catch (tokenError) {
+      logger.warn(`Token invalide: ${tokenError.message}`);
+      
+      if (tokenError.name === 'TokenExpiredError') {
+        return res.status(401).json({ 
+          message: 'Session expirée, veuillez vous reconnecter',
+          error: 'TOKEN_EXPIRED'
+        });
+      }
+      
+      return res.status(401).json({ 
+        message: 'Token invalide',
+        error: 'INVALID_TOKEN'
       });
     }
-    
-    next();
   } catch (error) {
     logger.error(`Erreur d'authentification: ${error.message}`);
-    
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        message: 'Session expirée. Veuillez vous reconnecter.'
-      });
-    }
-    
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({
-        message: 'Token invalide. Veuillez vous reconnecter.'
-      });
-    }
-    
-    return res.status(401).json({
-      message: 'Erreur d\'authentification'
-    });
+    next(error);
   }
 };
 
 /**
  * Middleware d'autorisation basé sur les rôles
- * @param {Array<String>} roles - Rôles autorisés
+ * Vérifie que l'utilisateur a les rôles requis
+ * @param {String[]} roles - Tableau des rôles autorisés
  */
 exports.authorize = (roles = []) => {
   return (req, res, next) => {
-    // Vérifier que l'utilisateur est authentifié
+    // S'assurer que le middleware d'authentification a été exécuté
     if (!req.user) {
-      return res.status(401).json({
-        message: 'Accès non autorisé. Authentification requise.'
+      return res.status(401).json({ 
+        message: 'Authentification requise',
+        error: 'NO_AUTH'
       });
     }
-    
-    // Convertir en tableau si une seule valeur est fournie
+
+    // Convertir en tableau si une chaîne est fournie
     const allowedRoles = Array.isArray(roles) ? roles : [roles];
     
-    // Vérifier que le rôle de l'utilisateur est autorisé
-    if (allowedRoles.length && !allowedRoles.includes(req.user.role)) {
-      logger.warn(`Tentative d'accès non autorisé: ${req.user.email} (${req.user.role}) -> ${req.originalUrl}`);
-      
-      return res.status(403).json({
-        message: 'Vous n\'avez pas les permissions nécessaires pour cette action.'
+    // Si aucun rôle n'est spécifié, autoriser tous les utilisateurs authentifiés
+    if (allowedRoles.length === 0) {
+      return next();
+    }
+    
+    // Vérifier si l'utilisateur a un rôle autorisé
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({ 
+        message: 'Accès non autorisé',
+        error: 'FORBIDDEN'
       });
     }
     
@@ -85,72 +100,70 @@ exports.authorize = (roles = []) => {
 };
 
 /**
- * Middleware pour vérifier la propriété d'une ressource
- * @param {Function} getResourceIdFn - Fonction pour extraire l'ID de la ressource de la requête
- * @param {Function} checkOwnershipFn - Fonction asynchrone pour vérifier la propriété
- * @param {Array<String>} bypassRoles - Rôles pouvant bypasser la vérification
+ * Middleware pour vérifier que l'utilisateur peut accéder à une ressource
+ * Vérifie que l'ID de l'utilisateur correspond à celui de la ressource,
+ * ou que l'utilisateur est un administrateur ou un manager.
+ * @param {Function} getResourceUserId - Fonction qui retourne l'ID utilisateur de la ressource
  */
-exports.checkOwnership = (getResourceIdFn, checkOwnershipFn, bypassRoles = ['admin']) => {
+exports.checkResourceAccess = (getResourceUserId) => {
   return async (req, res, next) => {
     try {
-      // Vérifier que l'utilisateur est authentifié
+      // S'assurer que le middleware d'authentification a été exécuté
       if (!req.user) {
-        return res.status(401).json({
-          message: 'Accès non autorisé. Authentification requise.'
+        return res.status(401).json({ 
+          message: 'Authentification requise',
+          error: 'NO_AUTH'
         });
       }
       
-      // Si l'utilisateur a un rôle qui bypass la vérification
-      if (bypassRoles.includes(req.user.role)) {
+      // Les administrateurs et managers ont accès à toutes les ressources
+      if (req.user.role === 'admin' || req.user.role === 'manager') {
         return next();
       }
       
-      // Récupérer l'ID de la ressource
-      const resourceId = getResourceIdFn(req);
-      if (!resourceId) {
-        return res.status(400).json({
-          message: 'ID de ressource manquant ou invalide.'
-        });
-      }
+      // Récupérer l'ID utilisateur associé à la ressource demandée
+      const resourceUserId = await getResourceUserId(req);
       
-      // Vérifier la propriété
-      const isOwner = await checkOwnershipFn(req.user.id, resourceId);
-      if (!isOwner) {
-        logger.warn(`Tentative d'accès à une ressource non possédée: ${req.user.email} -> ${req.originalUrl}`);
-        
-        return res.status(403).json({
-          message: 'Vous n\'avez pas les permissions nécessaires pour cette ressource.'
+      // Si l'ID utilisateur de la ressource ne correspond pas à celui connecté
+      if (resourceUserId !== req.user.id) {
+        return res.status(403).json({ 
+          message: 'Accès non autorisé à cette ressource',
+          error: 'FORBIDDEN_RESOURCE'
         });
       }
       
       next();
     } catch (error) {
-      logger.error(`Erreur de vérification de propriété: ${error.message}`);
+      logger.error(`Erreur de vérification d'accès: ${error.message}`);
       next(error);
     }
   };
 };
 
 /**
- * Fonctions helper pour checkOwnership
+ * Middleware pour journaliser les accès aux API
  */
-exports.getDocumentId = (req) => req.params.id;
-exports.getPlanningId = (req) => req.params.id;
-
-/**
- * Vérification de propriété pour un document
- */
-exports.isDocumentOwner = async (userId, documentId) => {
-  const { Document } = require('../models');
-  const document = await Document.findByPk(documentId);
-  return document && document.recipientId === userId;
-};
-
-/**
- * Vérification de propriété pour un planning
- */
-exports.isPlanningOwner = async (userId, planningId) => {
-  const { Planning } = require('../models');
-  const planning = await Planning.findByPk(planningId);
-  return planning && planning.employeeId === userId;
+exports.apiLogger = (req, res, next) => {
+  const start = Date.now();
+  
+  // Fonction à exécuter à la fin de la requête
+  const logFinish = () => {
+    const duration = Date.now() - start;
+    const userInfo = req.user ? `User ID: ${req.user.id}, Role: ${req.user.role}` : 'Non authentifié';
+    const logMessage = `${req.method} ${req.originalUrl} - ${res.statusCode} - ${duration}ms - ${userInfo}`;
+    
+    // Log avec un niveau différent selon le code de statut
+    if (res.statusCode >= 500) {
+      logger.error(logMessage);
+    } else if (res.statusCode >= 400) {
+      logger.warn(logMessage);
+    } else {
+      logger.info(logMessage);
+    }
+  };
+  
+  // Intercept la fin de la réponse pour enregistrer les logs
+  res.on('finish', logFinish);
+  
+  next();
 };
