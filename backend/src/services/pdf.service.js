@@ -1,337 +1,439 @@
-const PDFDocument = require('pdfkit');
 const fs = require('fs').promises;
 const path = require('path');
-const crypto = require('crypto');
+const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 const logger = require('../utils/logger');
+const fileService = require('./file.service');
 const { format } = require('date-fns');
 const { fr } = require('date-fns/locale');
 
 /**
- * Service pour la génération de documents PDF
+ * Service de génération de documents PDF
  */
-class PDFService {
-  constructor() {
-    this.tempDir = process.env.TEMP_DIR || path.join(__dirname, '../../uploads/temp');
-    
-    // Initialiser le dossier temporaire
-    this.initializeTempDir();
-  }
-  
+class PdfService {
   /**
-   * Crée le dossier temporaire s'il n'existe pas
-   */
-  async initializeTempDir() {
-    try {
-      await fs.access(this.tempDir);
-    } catch (error) {
-      // Créer le dossier s'il n'existe pas
-      await fs.mkdir(this.tempDir, { recursive: true });
-      logger.info(`Dossier temporaire créé: ${this.tempDir}`);
-    }
-  }
-  
-  /**
-   * Génère un PDF pour un planning mensuel
+   * Génère un PDF du planning mensuel
    * @param {Object} planning - Objet planning avec ses services
    * @returns {Promise<String>} Chemin du fichier PDF généré
    */
   async generatePlanningPDF(planning) {
-    return new Promise(async (resolve, reject) => {
-      try {
-        // Créer un nom de fichier unique
-        const fileName = `planning_${planning.month}_${planning.year}_${crypto.randomBytes(4).toString('hex')}.pdf`;
-        const filePath = path.join(this.tempDir, fileName);
-        
-        // Créer le document PDF
-        const doc = new PDFDocument({ 
-          size: 'A4',
-          margins: { top: 50, bottom: 50, left: 50, right: 50 },
-          info: {
-            Title: `Planning ${planning.month}/${planning.year}`,
-            Author: 'EHPAD Connect',
-            Subject: `Planning mensuel pour ${planning.employee?.name || 'Employé'}`,
-            Keywords: 'planning, ehpad, horaires',
-            CreationDate: new Date()
-          }
+    try {
+      // Création d'un nouveau document PDF
+      const pdfDoc = await PDFDocument.create();
+      
+      // Ajout d'une page
+      const page = pdfDoc.addPage([595.28, 841.89]); // A4 en points
+      
+      // Récupération des polices
+      const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      
+      // Largeur et hauteur de la page
+      const { width, height } = page.getSize();
+      
+      // Informations sur l'employé et le planning
+      const employeeName = planning.employee ? planning.employee.name : 'Employé';
+      const monthName = format(new Date(planning.year, planning.month - 1), 'MMMM yyyy', { locale: fr });
+      
+      // Titre
+      page.drawText('EHPAD Belleviste', {
+        x: 50,
+        y: height - 50,
+        size: 20,
+        font: helveticaBold,
+        color: rgb(0.1, 0.1, 0.1)
+      });
+      
+      // Sous-titre
+      page.drawText(`Planning mensuel - ${monthName}`, {
+        x: 50,
+        y: height - 80,
+        size: 16,
+        font: helveticaBold,
+        color: rgb(0.1, 0.1, 0.1)
+      });
+      
+      // Informations sur l'employé
+      page.drawText(`Employé : ${employeeName}`, {
+        x: 50,
+        y: height - 110,
+        size: 12,
+        font: helveticaFont,
+        color: rgb(0.1, 0.1, 0.1)
+      });
+      
+      page.drawText(`Généré le : ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, {
+        x: 50,
+        y: height - 130,
+        size: 10,
+        font: helveticaFont,
+        color: rgb(0.5, 0.5, 0.5)
+      });
+      
+      // Légende
+      const legendY = height - 160;
+      page.drawText('Légende :', {
+        x: 50,
+        y: legendY,
+        size: 10,
+        font: helveticaBold,
+        color: rgb(0.1, 0.1, 0.1)
+      });
+      
+      // Rectangle pour Matin
+      page.drawRectangle({
+        x: 120,
+        y: legendY - 5,
+        width: 10,
+        height: 10,
+        color: rgb(0.9, 0.95, 1)
+      });
+      page.drawText('Matin', {
+        x: 135,
+        y: legendY,
+        size: 10,
+        font: helveticaFont,
+        color: rgb(0.1, 0.1, 0.1)
+      });
+      
+      // Rectangle pour Après-midi
+      page.drawRectangle({
+        x: 180,
+        y: legendY - 5,
+        width: 10,
+        height: 10,
+        color: rgb(1, 0.9, 0.95)
+      });
+      page.drawText('Après-midi', {
+        x: 195,
+        y: legendY,
+        size: 10,
+        font: helveticaFont,
+        color: rgb(0.1, 0.1, 0.1)
+      });
+      
+      // Rectangle pour Nuit
+      page.drawRectangle({
+        x: 270,
+        y: legendY - 5,
+        width: 10,
+        height: 10,
+        color: rgb(0.9, 0.9, 1)
+      });
+      page.drawText('Nuit', {
+        x: 285,
+        y: legendY,
+        size: 10,
+        font: helveticaFont,
+        color: rgb(0.1, 0.1, 0.1)
+      });
+      
+      // Rectangle pour Repos
+      page.drawRectangle({
+        x: 330,
+        y: legendY - 5,
+        width: 10,
+        height: 10,
+        color: rgb(0.95, 0.95, 0.95)
+      });
+      page.drawText('Repos', {
+        x: 345,
+        y: legendY,
+        size: 10,
+        font: helveticaFont,
+        color: rgb(0.1, 0.1, 0.1)
+      });
+      
+      // Tableau des services
+      const tableTop = legendY - 30;
+      const tableLeft = 50;
+      const colWidth = 70;
+      const rowHeight = 30;
+      const cols = 7; // 7 jours par semaine
+      const tableWidth = cols * colWidth;
+      
+      // En-têtes des jours de la semaine
+      const daysOfWeek = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+      
+      // Dessiner l'en-tête du tableau
+      for (let i = 0; i < cols; i++) {
+        // Bord supérieur et inférieur de l'en-tête
+        page.drawLine({
+          start: { x: tableLeft + i * colWidth, y: tableTop },
+          end: { x: tableLeft + (i + 1) * colWidth, y: tableTop },
+          thickness: 1,
+          color: rgb(0.5, 0.5, 0.5)
         });
         
-        // Stream vers un fichier
-        const stream = fs.createWriteStream(filePath);
-        doc.pipe(stream);
+        page.drawLine({
+          start: { x: tableLeft + i * colWidth, y: tableTop - 20 },
+          end: { x: tableLeft + (i + 1) * colWidth, y: tableTop - 20 },
+          thickness: 1,
+          color: rgb(0.5, 0.5, 0.5)
+        });
         
-        // En-tête
-        doc.font('Helvetica-Bold')
-           .fontSize(18)
-           .text('EHPAD Belleviste', { align: 'center' })
-           .fontSize(16)
-           .text(`Planning du mois de ${this.getMonthName(planning.month)} ${planning.year}`, { align: 'center' })
-           .moveDown(0.5);
+        // Bords verticaux
+        page.drawLine({
+          start: { x: tableLeft + i * colWidth, y: tableTop },
+          end: { x: tableLeft + i * colWidth, y: tableTop - 20 },
+          thickness: 1,
+          color: rgb(0.5, 0.5, 0.5)
+        });
         
-        // Informations employé
-        doc.fontSize(12)
-           .text(`Employé: ${planning.employee?.name || 'Non spécifié'}`, { align: 'left' })
-           .text(`Statut: ${this.getPlanningStatusText(planning.status)}`, { align: 'left' })
-           .moveDown(1);
+        // Texte des jours
+        page.drawText(daysOfWeek[i], {
+          x: tableLeft + i * colWidth + 5,
+          y: tableTop - 15,
+          size: 10,
+          font: helveticaBold,
+          color: rgb(0.1, 0.1, 0.1)
+        });
+      }
+      
+      // Bord vertical final de l'en-tête
+      page.drawLine({
+        start: { x: tableLeft + cols * colWidth, y: tableTop },
+        end: { x: tableLeft + cols * colWidth, y: tableTop - 20 },
+        thickness: 1,
+        color: rgb(0.5, 0.5, 0.5)
+      });
+      
+      // Trier les services par date
+      const shifts = planning.Shifts ? [...planning.Shifts].sort((a, b) => 
+        new Date(a.date) - new Date(b.date)
+      ) : [];
+      
+      // Calculer le nombre de semaines nécessaires
+      const daysInMonth = new Date(planning.year, planning.month, 0).getDate();
+      const firstDayOfMonth = new Date(planning.year, planning.month - 1, 1).getDay(); // 0 = dimanche
+      const firstWeekdayOfMonth = firstDayOfMonth === 0 ? 7 : firstDayOfMonth; // Transformer dimanche en 7
+      const weeksNeeded = Math.ceil((daysInMonth + firstWeekdayOfMonth - 1) / 7);
+      
+      // Dessiner le tableau des services
+      for (let week = 0; week < weeksNeeded; week++) {
+        // Déterminer le jour de début de la semaine
+        const startDayOfWeek = week * 7 - firstWeekdayOfMonth + 2;
         
-        // Tableau des services
-        this.drawPlanningTable(doc, planning);
-        
-        // Pied de page
-        doc.fontSize(10)
-           .text(`Document généré le ${format(new Date(), 'dd/MM/yyyy à HH:mm')}`, { align: 'center' })
-           .text('EHPAD Connect - Application de gestion des plannings', { align: 'center' });
-        
-        // Zone de signature
-        if (planning.status === 'signed' && planning.signedAt) {
-          this.drawSignatureBlock(doc, planning);
-        } else {
-          this.drawSignatureArea(doc);
+        // Dessiner les cellules de la semaine
+        for (let i = 0; i < cols; i++) {
+          const dayOfMonth = startDayOfWeek + i;
+          const y = tableTop - 20 - week * rowHeight;
+          
+          // Bords verticaux
+          page.drawLine({
+            start: { x: tableLeft + i * colWidth, y },
+            end: { x: tableLeft + i * colWidth, y: y - rowHeight },
+            thickness: 1,
+            color: rgb(0.5, 0.5, 0.5)
+          });
+          
+          // Bord inférieur
+          page.drawLine({
+            start: { x: tableLeft + i * colWidth, y: y - rowHeight },
+            end: { x: tableLeft + (i + 1) * colWidth, y: y - rowHeight },
+            thickness: 1,
+            color: rgb(0.5, 0.5, 0.5)
+          });
+          
+          // Si le jour fait partie du mois
+          if (dayOfMonth > 0 && dayOfMonth <= daysInMonth) {
+            // Afficher le numéro du jour
+            page.drawText(`${dayOfMonth}`, {
+              x: tableLeft + i * colWidth + 5,
+              y: y - 15,
+              size: 10,
+              font: helveticaBold,
+              color: rgb(0.1, 0.1, 0.1)
+            });
+            
+            // Trouver le service pour ce jour
+            const dateString = `${planning.year}-${String(planning.month).padStart(2, '0')}-${String(dayOfMonth).padStart(2, '0')}`;
+            const shift = shifts.find(s => s.date === dateString);
+            
+            if (shift) {
+              // Fond coloré selon le type de service
+              let fillColor;
+              switch (shift.shiftType) {
+                case 'morning':
+                  fillColor = rgb(0.9, 0.95, 1);
+                  break;
+                case 'afternoon':
+                  fillColor = rgb(1, 0.9, 0.95);
+                  break;
+                case 'night':
+                  fillColor = rgb(0.9, 0.9, 1);
+                  break;
+                default:
+                  fillColor = rgb(0.95, 0.95, 0.95);
+              }
+              
+              // Rectangle de fond
+              page.drawRectangle({
+                x: tableLeft + i * colWidth + 1,
+                y: y - rowHeight + 1,
+                width: colWidth - 2,
+                height: rowHeight - 1,
+                color: fillColor,
+                opacity: 0.5
+              });
+              
+              // Informations du service
+              if (shift.shiftType !== 'rest') {
+                const shiftTypes = {
+                  morning: 'Matin',
+                  afternoon: 'Après-midi',
+                  night: 'Nuit'
+                };
+                
+                page.drawText(shiftTypes[shift.shiftType] || shift.shiftType, {
+                  x: tableLeft + i * colWidth + 5,
+                  y: y - 30,
+                  size: 8,
+                  font: helveticaBold,
+                  color: rgb(0.1, 0.1, 0.1)
+                });
+                
+                if (shift.startTime && shift.endTime) {
+                  const hours = `${shift.startTime.substring(0, 5)}-${shift.endTime.substring(0, 5)}`;
+                  page.drawText(hours, {
+                    x: tableLeft + i * colWidth + 5,
+                    y: y - 40,
+                    size: 8,
+                    font: helveticaFont,
+                    color: rgb(0.3, 0.3, 0.3)
+                  });
+                }
+                
+                if (shift.service) {
+                  page.drawText(shift.service, {
+                    x: tableLeft + i * colWidth + 5,
+                    y: y - 50,
+                    size: 8,
+                    font: helveticaFont,
+                    color: rgb(0.3, 0.3, 0.3)
+                  });
+                }
+              } else {
+                page.drawText('Repos', {
+                  x: tableLeft + i * colWidth + 5,
+                  y: y - 30,
+                  size: 8,
+                  font: helveticaFont,
+                  color: rgb(0.5, 0.5, 0.5)
+                });
+              }
+            }
+          }
         }
         
-        // Finaliser le document
-        doc.end();
+        // Bord vertical final
+        page.drawLine({
+          start: { x: tableLeft + cols * colWidth, y: tableTop - 20 - week * rowHeight },
+          end: { x: tableLeft + cols * colWidth, y: tableTop - 20 - (week + 1) * rowHeight },
+          thickness: 1,
+          color: rgb(0.5, 0.5, 0.5)
+        });
+      }
+      
+      // Section de signature
+      const signatureTop = tableTop - 20 - weeksNeeded * rowHeight - 50;
+      
+      page.drawText('Signature de l\'employé :', {
+        x: 50,
+        y: signatureTop,
+        size: 12,
+        font: helveticaBold,
+        color: rgb(0.1, 0.1, 0.1)
+      });
+      
+      // Rectangle pour la signature
+      page.drawRectangle({
+        x: 50,
+        y: signatureTop - 80,
+        width: 200,
+        height: 70,
+        borderColor: rgb(0.5, 0.5, 0.5),
+        borderWidth: 1
+      });
+      
+      // Texte pour la signature électronique
+      if (planning.status === 'signed' && planning.signedAt) {
+        const signatureDate = format(new Date(planning.signedAt), 'dd/MM/yyyy HH:mm');
         
-        // Attendre la fin de l'écriture
-        stream.on('finish', () => {
-          logger.info(`PDF du planning généré: ${filePath}`);
-          resolve(filePath);
+        page.drawText('Document signé électroniquement', {
+          x: 60,
+          y: signatureTop - 30,
+          size: 10,
+          font: helveticaBold,
+          color: rgb(0.1, 0.6, 0.1)
         });
         
-        stream.on('error', (error) => {
-          logger.error(`Erreur lors de la génération du PDF: ${error.message}`);
-          reject(error);
+        page.drawText(`Date : ${signatureDate}`, {
+          x: 60,
+          y: signatureTop - 45,
+          size: 10,
+          font: helveticaFont,
+          color: rgb(0.1, 0.6, 0.1)
         });
-      } catch (error) {
-        logger.error(`Erreur lors de la génération du PDF: ${error.message}`);
-        reject(error);
-      }
-    });
-  }
-  
-  /**
-   * Dessine le tableau du planning
-   * @param {PDFDocument} doc - Document PDF
-   * @param {Object} planning - Objet planning
-   */
-  drawPlanningTable(doc, planning) {
-    // Définir les shifts triés par date
-    const shifts = planning.Shifts ? [...planning.Shifts].sort((a, b) => {
-      return new Date(a.date) - new Date(b.date);
-    }) : [];
-    
-    // Définir les dimensions du tableau
-    const tableTop = doc.y + 15;
-    const cellPadding = 8;
-    const colWidths = {
-      date: 100,
-      hours: 150,
-      shift: 130,
-      service: 150
-    };
-    const tableWidth = colWidths.date + colWidths.hours + colWidths.shift + colWidths.service;
-    
-    // Dessiner l'en-tête du tableau
-    doc.font('Helvetica-Bold')
-       .fontSize(12)
-       .fillColor('#333333');
-    
-    let yPos = tableTop;
-    
-    // En-tête
-    doc.rect(50, yPos, tableWidth, 30).fill('#f2f2f2').stroke('#000000');
-    doc.fillColor('#333333')
-       .text('Date', 50 + cellPadding, yPos + 10)
-       .text('Horaires', 50 + colWidths.date + cellPadding, yPos + 10)
-       .text('Service', 50 + colWidths.date + colWidths.hours + cellPadding, yPos + 10)
-       .text('Localisation', 50 + colWidths.date + colWidths.hours + colWidths.shift + cellPadding, yPos + 10);
-    
-    yPos += 30;
-    
-    // Lignes du tableau
-    doc.font('Helvetica')
-       .fontSize(10);
-    
-    let oddRow = false;
-    
-    for (const shift of shifts) {
-      const rowHeight = 25;
-      
-      // Fond alterné
-      if (oddRow) {
-        doc.rect(50, yPos, tableWidth, rowHeight).fill('#f9f9f9').stroke('#CCCCCC');
-      } else {
-        doc.rect(50, yPos, tableWidth, rowHeight).fillColor('#ffffff').stroke('#CCCCCC');
+        
+        page.drawText(`ID : ${planning.signatureId || 'N/A'}`, {
+          x: 60,
+          y: signatureTop - 60,
+          size: 10,
+          font: helveticaFont,
+          color: rgb(0.1, 0.6, 0.1)
+        });
       }
       
-      // Date formatée
-      const shiftDate = new Date(shift.date);
-      const formattedDate = format(shiftDate, 'EEEE dd/MM', { locale: fr });
+      // Signature du responsable
+      page.drawText('Signature du responsable :', {
+        x: 300,
+        y: signatureTop,
+        size: 12,
+        font: helveticaBold,
+        color: rgb(0.1, 0.1, 0.1)
+      });
       
-      // Horaires
-      const hours = shift.shiftType === 'rest' 
-        ? 'Repos' 
-        : `${shift.startTime?.substring(0, 5) || ''} - ${shift.endTime?.substring(0, 5) || ''}`;
+      // Rectangle pour la signature du responsable
+      page.drawRectangle({
+        x: 300,
+        y: signatureTop - 80,
+        width: 200,
+        height: 70,
+        borderColor: rgb(0.5, 0.5, 0.5),
+        borderWidth: 1
+      });
       
-      // Type de service avec couleur
-      const shiftTypeColor = this.getShiftTypeColor(shift.shiftType);
+      // Pied de page
+      page.drawText('EHPAD Belleviste - Document généré par EHPAD Connect', {
+        x: 50,
+        y: 30,
+        size: 8,
+        font: helveticaFont,
+        color: rgb(0.5, 0.5, 0.5)
+      });
       
-      // Textes des cellules
-      doc.fillColor('#333333');
+      // Génération du PDF
+      const pdfBytes = await pdfDoc.save();
       
-      // Date
-      doc.text(formattedDate, 50 + cellPadding, yPos + 8);
+      // Création d'un fichier temporaire
+      const pdfPath = await fileService.createTempFile(pdfBytes, '.pdf');
       
-      // Horaires
-      doc.text(hours, 50 + colWidths.date + cellPadding, yPos + 8);
-      
-      // Type de service
-      doc.fillColor(shiftTypeColor)
-         .text(this.getShiftTypeText(shift.shiftType), 50 + colWidths.date + colWidths.hours + cellPadding, yPos + 8);
-      
-      // Service/localisation
-      doc.fillColor('#333333')
-         .text(shift.service || '', 50 + colWidths.date + colWidths.hours + colWidths.shift + cellPadding, yPos + 8);
-      
-      yPos += rowHeight;
-      oddRow = !oddRow;
-      
-      // Nouvelle page si nécessaire
-      if (yPos > doc.page.height - 150) {
-        doc.addPage();
-        yPos = 50;
-        oddRow = false;
-      }
+      logger.info(`PDF du planning généré: ${pdfPath}`);
+      return pdfPath;
+    } catch (error) {
+      logger.error(`Erreur lors de la génération du PDF: ${error.message}`);
+      throw error;
     }
-    
-    // Ajouter espace après le tableau
-    doc.moveDown(2);
-  }
-  
-  /**
-   * Dessine une zone de signature vide
-   * @param {PDFDocument} doc - Document PDF
-   */
-  drawSignatureArea(doc) {
-    // Texte d'explication
-    doc.moveDown(2);
-    doc.fontSize(12)
-       .text('Signature de l\'employé:', { align: 'left' })
-       .moveDown(0.5);
-    
-    // Rectangle pour la signature
-    doc.rect(50, doc.y, 200, 100)
-       .stroke('#CCCCCC');
-    
-    doc.moveDown(6);
-    doc.fontSize(10)
-       .fillColor('#666666')
-       .text('Date: ________________', { align: 'left' });
-    
-    doc.moveDown(1);
-    doc.text('Ce document doit être signé électroniquement via l\'application EHPAD Connect.', { align: 'center' });
-  }
-  
-  /**
-   * Dessine un bloc de signature avec certificat
-   * @param {PDFDocument} doc - Document PDF
-   * @param {Object} planning - Objet planning
-   */
-  drawSignatureBlock(doc, planning) {
-    doc.moveDown(2);
-    
-    // Fond du bloc de signature
-    doc.rect(50, doc.y, 500, 120)
-       .fill('#f5f5f5')
-       .stroke('#cccccc');
-    
-    const signatureY = doc.y;
-    
-    // Titre
-    doc.fontSize(12)
-       .fillColor('#333333')
-       .text('DOCUMENT SIGNÉ ÉLECTRONIQUEMENT', 70, signatureY + 15, { align: 'left' })
-       .moveDown(0.5);
-    
-    // Détails de la signature
-    doc.fontSize(9)
-       .fillColor('#666666');
-    
-    doc.text(`Signé par: ${planning.employee?.name || 'Employé'}`, 70, doc.y);
-    doc.text(`Date de signature: ${format(new Date(planning.signedAt), 'dd/MM/yyyy à HH:mm:ss')}`, 70, doc.y + 15);
-    doc.text(`ID de signature: ${planning.signatureId || 'Non disponible'}`, 70, doc.y + 30);
-    doc.text(`Certificat de validation: EHPAD Connect - ${crypto.createHash('sha256').update(planning.id.toString() + planning.signedAt.toString()).digest('hex').substring(0, 8)}`, 70, doc.y + 45);
-    
-    // Ajouter un QR code simulé (rectangle gris)
-    doc.rect(450, signatureY + 15, 80, 80)
-       .fillColor('#dddddd');
-    
-    // Revenir à la position après le bloc
-    doc.x = 50;
-    doc.y = signatureY + 130;
-  }
-  
-  /**
-   * Obtient le texte descriptif du statut du planning
-   * @param {String} status - Statut du planning
-   * @returns {String} Texte descriptif
-   */
-  getPlanningStatusText(status) {
-    switch (status) {
-      case 'draft': return 'Brouillon';
-      case 'published': return 'Publié';
-      case 'signed': return 'Signé';
-      default: return status || 'Non défini';
-    }
-  }
-  
-  /**
-   * Obtient le texte descriptif du type de service
-   * @param {String} shiftType - Type de service
-   * @returns {String} Texte descriptif
-   */
-  getShiftTypeText(shiftType) {
-    switch (shiftType) {
-      case 'morning': return 'Matin';
-      case 'afternoon': return 'Après-midi';
-      case 'night': return 'Nuit';
-      case 'rest': return 'Repos';
-      default: return shiftType || 'Non défini';
-    }
-  }
-  
-  /**
-   * Obtient la couleur associée au type de service
-   * @param {String} shiftType - Type de service
-   * @returns {String} Code couleur
-   */
-  getShiftTypeColor(shiftType) {
-    switch (shiftType) {
-      case 'morning': return '#1976d2';    // Bleu
-      case 'afternoon': return '#e91e63';  // Rose
-      case 'night': return '#3f51b5';      // Bleu foncé
-      case 'rest': return '#9e9e9e';       // Gris
-      default: return '#333333';           // Noir
-    }
-  }
-  
-  /**
-   * Obtient le nom du mois en français
-   * @param {Number} month - Numéro du mois (1-12)
-   * @returns {String} Nom du mois
-   */
-  getMonthName(month) {
-    const date = new Date(2000, month - 1, 1);
-    return format(date, 'MMMM', { locale: fr });
   }
   
   /**
    * Supprime un fichier temporaire
-   * @param {String} filePath - Chemin du fichier
+   * @param {String} filePath - Chemin du fichier à supprimer
    */
   async deleteTempFile(filePath) {
     try {
       await fs.unlink(filePath);
-      logger.info(`Fichier temporaire supprimé: ${filePath}`);
+      logger.debug(`Fichier temporaire supprimé: ${filePath}`);
     } catch (error) {
       logger.warn(`Impossible de supprimer le fichier temporaire: ${error.message}`);
     }
@@ -347,10 +449,10 @@ class PDFService {
       const stats = await fs.stat(filePath);
       return stats.size;
     } catch (error) {
-      logger.error(`Erreur lors de la récupération de la taille du fichier: ${error.message}`);
+      logger.warn(`Impossible d'obtenir la taille du fichier: ${error.message}`);
       return 0;
     }
   }
 }
 
-module.exports = new PDFService();
+module.exports = new PdfService();
