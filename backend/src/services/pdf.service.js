@@ -1,161 +1,306 @@
+const PDFDocument = require('pdfkit');
 const fs = require('fs').promises;
 const path = require('path');
-const { createReport } = require('docx-templates');
 const logger = require('../utils/logger');
 const fileService = require('./file.service');
 
 /**
- * Service de génération de documents PDF
+ * Service de génération de PDF
  */
 class PDFService {
-  constructor() {
-    this.templatesDir = process.env.PDF_TEMPLATES_DIR || path.join(__dirname, '../../templates');
-    
-    // Initialiser le dossier de templates si nécessaire
-    this.initializeTemplatesDir();
-  }
-  
   /**
-   * Crée le dossier de templates s'il n'existe pas
-   */
-  async initializeTemplatesDir() {
-    try {
-      await fs.access(this.templatesDir);
-    } catch (error) {
-      await fs.mkdir(this.templatesDir, { recursive: true });
-      logger.info(`Dossier de templates créé: ${this.templatesDir}`);
-      
-      // Créer des templates par défaut si nécessaire
-      await this.createDefaultTemplates();
-    }
-  }
-  
-  /**
-   * Crée des templates par défaut
-   */
-  async createDefaultTemplates() {
-    // Le template par défaut pour les plannings sera créé quand nécessaire
-    logger.info('Templates par défaut initialisés');
-  }
-  
-  /**
-   * Génère un PDF de planning mensuel
-   * @param {Object} planning - Objet planning avec ses services
+   * Génère un PDF du planning mensuel
+   * @param {Object} planning - Objet planning avec les relations associées
    * @returns {Promise<String>} Chemin du fichier PDF généré
    */
   async generatePlanningPDF(planning) {
     try {
-      // Vérifier que le planning contient les données nécessaires
-      if (!planning || !planning.Shifts) {
-        throw new Error('Planning invalide ou incomplet');
-      }
-      
-      // Préparer les données pour le template
-      const data = {
-        title: `Planning ${planning.month}/${planning.year}`,
-        employeeName: planning.employee?.name || 'Employé',
-        month: planning.month,
-        year: planning.year,
-        shifts: planning.Shifts.map(shift => ({
-          date: new Date(shift.date).toLocaleDateString('fr-FR', { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-          }),
-          day: new Date(shift.date).getDate(),
-          weekday: new Date(shift.date).toLocaleDateString('fr-FR', { weekday: 'long' }),
-          startTime: shift.startTime,
-          endTime: shift.endTime,
-          type: this.getShiftTypeName(shift.shiftType),
-          service: shift.service || '',
-          location: shift.location || '',
-          status: this.getStatusName(shift.status)
-        })),
-        generatedAt: new Date().toLocaleDateString('fr-FR', { 
-          year: 'numeric', 
-          month: 'long', 
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        })
-      };
-      
-      // Créer le tableau des jours du mois
-      const daysInMonth = new Date(planning.year, planning.month, 0).getDate();
-      data.days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-      
-      // Créer un tableau organisé par semaine pour l'affichage calendrier
-      data.calendar = this.organizeCalendarByWeek(planning.year, planning.month, planning.Shifts);
-      
-      // Chemin du template
-      const templatePath = path.join(this.templatesDir, 'planning_template.docx');
-      
-      // Vérifier si le template existe, sinon utiliser le template par défaut
-      try {
-        await fs.access(templatePath);
-      } catch (error) {
-        // Créer le template par défaut
-        await this.createDefaultPlanningTemplate();
-      }
-      
-      // Générer le rapport DOCX
-      const buffer = await createReport({
-        template: templatePath,
-        data
+      // Créer un nouveau document PDF
+      const doc = new PDFDocument({ 
+        size: 'A4',
+        margins: { top: 50, bottom: 50, left: 50, right: 50 }
       });
       
-      // Créer un fichier temporaire
-      const docxPath = await fileService.createTempFile(buffer, '.docx');
+      // Créer un flux de fichier temporaire
+      const tempFilePath = await fileService.createTempFile('', '.pdf');
+      const stream = fs.createWriteStream(tempFilePath);
       
-      // Convertir DOCX en PDF
-      // Note: Dans une vraie implémentation, nous utiliserions une librairie comme
-      // libreoffice-convert, unoconv, docx-pdf ou un service comme Gotenberg
-      // Pour l'exemple, on va simplement renommer le fichier
-      const pdfPath = docxPath.replace('.docx', '.pdf');
-      await fs.rename(docxPath, pdfPath);
+      // Pipe du PDF vers le fichier
+      doc.pipe(stream);
       
-      logger.info(`PDF de planning généré: ${pdfPath}`);
-      return pdfPath;
+      // Titre et entête
+      this.addHeader(doc, planning);
+      
+      // Tableau des services
+      this.addPlanningTable(doc, planning);
+      
+      // Pied de page
+      this.addFooter(doc, planning);
+      
+      // Finaliser le PDF
+      doc.end();
+      
+      // Attendre que le fichier soit écrit
+      await new Promise(resolve => {
+        stream.on('finish', resolve);
+      });
+      
+      logger.info(`PDF du planning généré: ${tempFilePath}`);
+      return tempFilePath;
     } catch (error) {
-      logger.error(`Erreur lors de la génération du PDF de planning: ${error.message}`);
+      logger.error(`Erreur lors de la génération du PDF: ${error.message}`);
       throw error;
     }
   }
   
   /**
-   * Crée un template de planning par défaut
+   * Ajoute l'en-tête au document PDF
+   * @param {PDFDocument} doc - Document PDF
+   * @param {Object} planning - Objet planning
    */
-  async createDefaultPlanningTemplate() {
-    try {
-      // Dans une vraie implémentation, nous créerions un fichier DOCX avec
-      // les balises de template appropriées (docx-templates)
+  addHeader(doc, planning) {
+    // Logo ou titre de l'établissement
+    doc.fontSize(20)
+       .font('Helvetica-Bold')
+       .text('EHPAD Belleviste', { align: 'center' });
+    
+    // Titre du document
+    doc.moveDown()
+       .fontSize(16)
+       .text(`Planning Mensuel - ${this.getMonthName(planning.month)} ${planning.year}`, { align: 'center' });
+    
+    // Informations de l'employé
+    if (planning.employee) {
+      doc.moveDown()
+         .fontSize(12)
+         .text(`Employé: ${planning.employee.name}`, { align: 'left' });
+    }
+    
+    // Date de génération
+    doc.fontSize(10)
+       .text(`Généré le: ${new Date().toLocaleDateString('fr-FR')}`, { align: 'right' });
+    
+    // Status du planning
+    const statusText = planning.status === 'signed' 
+      ? `Signé le: ${new Date(planning.signedAt).toLocaleDateString('fr-FR')}` 
+      : `Statut: ${this.formatStatus(planning.status)}`;
+    
+    doc.text(statusText, { align: 'right' });
+    
+    doc.moveDown(2);
+  }
+  
+  /**
+   * Ajoute le tableau des services au document PDF
+   * @param {PDFDocument} doc - Document PDF
+   * @param {Object} planning - Objet planning
+   */
+  addPlanningTable(doc, planning) {
+    // Dimensions et positions
+    const pageWidth = doc.page.width;
+    const startX = 50;
+    const startY = doc.y;
+    const colWidth = (pageWidth - 100) / 5; // 5 colonnes
+    const rowHeight = 30;
+    
+    // En-têtes du tableau
+    const headers = ['Date', 'Service', 'Début', 'Fin', 'Statut'];
+    
+    // Dessiner l'en-tête du tableau
+    doc.font('Helvetica-Bold')
+       .fontSize(12);
+    
+    headers.forEach((header, i) => {
+      doc.rect(startX + (i * colWidth), startY, colWidth, rowHeight)
+         .stroke();
       
-      // Pour l'exemple, on copie un template par défaut s'il existe
-      const defaultTemplatePath = path.join(__dirname, '../templates/default_planning_template.docx');
-      const targetPath = path.join(this.templatesDir, 'planning_template.docx');
+      doc.text(
+        header,
+        startX + (i * colWidth) + 5,
+        startY + 10,
+        { width: colWidth - 10 }
+      );
+    });
+    
+    // Trier les services par date
+    const shifts = [...planning.Shifts].sort((a, b) => {
+      return new Date(a.date) - new Date(b.date);
+    });
+    
+    // Dessiner les lignes du tableau
+    doc.font('Helvetica')
+       .fontSize(10);
+    
+    shifts.forEach((shift, i) => {
+      const y = startY + (i + 1) * rowHeight;
       
-      try {
-        await fs.access(defaultTemplatePath);
-        await fs.copyFile(defaultTemplatePath, targetPath);
-        logger.info(`Template de planning par défaut copié vers: ${targetPath}`);
-      } catch (error) {
-        // Créer un template minimal
-        const content = Buffer.from(
-          'PK\u0003\u0004\u0014\u0000\u0000\u0000\b\u0000�+�V���\u0018X\u0000\u0000\u0012\u0000\u0000\u0013\u0000\u0000\u0000[Content_Types].xml���N�0E�|E�-J��@5��*Q>�ؓ�=�䔼#!�\u0015�ѼB�3�0�kֲK��|�*-�l���{���z�Em\u000e\u001e�.�˹H��*k��\u0016���QFֹ��8N�J�t��Qg�\u0017@\u0018�\u0018ަm�^|Q�2\u0012�y\u0014�*x���n��!���\u0014�c�\u000f�\u000f�y*%쐳,\n?�_:VFJ����U�|��@�(�)��\u0017�Q>������{��;�*�̠�4`�˙�]\u0000�z\u0012�-���S\u0018���U<�~���\u0000�X�\u0004���\u0000����\u0000-��PK\u0001\u0002\u0014\u0000\u0014\u0000\u0000\u0000\b\u0000�+�V���\u0018X\u0000\u0000\u0012\u0000\u0000\u0013\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000 \u0000��\u0000\u0000\u0000\u0000[Content_Types].xmlPK\u0005\u0006\u0000\u0000\u0000\u0000\u0001\u0000\u0001\u00003\u0000\u0000\u0000[\u0000\u0000\u0000\u0000\u0000',
-          'binary'
-        );
-        await fs.writeFile(targetPath, content);
-        logger.info(`Template de planning minimal créé: ${targetPath}`);
+      // Vérifier si on a besoin d'une nouvelle page
+      if (y + rowHeight > doc.page.height - 100) {
+        doc.addPage();
+        return this.addPlanningTable(doc, {
+          ...planning,
+          Shifts: shifts.slice(i)
+        });
       }
-    } catch (error) {
-      logger.error(`Erreur lors de la création du template de planning par défaut: ${error.message}`);
-      throw error;
+      
+      // Dessiner les cellules
+      doc.fillColor(shift.shiftType === 'rest' ? '#f5f5f5' : 'white');
+      
+      headers.forEach((_, j) => {
+        doc.rect(startX + (j * colWidth), y, colWidth, rowHeight)
+           .fillAndStroke();
+      });
+      
+      doc.fillColor('black');
+      
+      // Date
+      const date = new Date(shift.date);
+      const formattedDate = `${date.getDate()}/${date.getMonth() + 1} ${this.getDayName(date.getDay())}`;
+      doc.text(
+        formattedDate,
+        startX + 5,
+        y + 10,
+        { width: colWidth - 10 }
+      );
+      
+      // Service
+      doc.text(
+        shift.shiftType === 'rest' ? 'Repos' : shift.service || '',
+        startX + colWidth + 5,
+        y + 10,
+        { width: colWidth - 10 }
+      );
+      
+      // Heure de début
+      doc.text(
+        shift.startTime || '-',
+        startX + (2 * colWidth) + 5,
+        y + 10,
+        { width: colWidth - 10 }
+      );
+      
+      // Heure de fin
+      doc.text(
+        shift.endTime || '-',
+        startX + (3 * colWidth) + 5,
+        y + 10,
+        { width: colWidth - 10 }
+      );
+      
+      // Statut
+      doc.text(
+        this.formatStatus(shift.status),
+        startX + (4 * colWidth) + 5,
+        y + 10,
+        { width: colWidth - 10 }
+      );
+    });
+    
+    // Mise à jour de la position Y
+    doc.y = startY + (shifts.length + 1) * rowHeight + 20;
+  }
+  
+  /**
+   * Ajoute le pied de page au document PDF
+   * @param {PDFDocument} doc - Document PDF
+   * @param {Object} planning - Objet planning
+   */
+  addFooter(doc, planning) {
+    // Espace pour signature si non signé
+    if (planning.status !== 'signed') {
+      doc.moveDown(2)
+         .fontSize(12)
+         .text('Signature de l\'employé:', { align: 'left' });
+      
+      doc.moveDown(3)
+         .text('...................................................', { align: 'left' });
+      
+      doc.moveDown(2)
+         .fontSize(12)
+         .text('Signature du responsable:', { align: 'right' });
+      
+      doc.moveDown(3)
+         .text('...................................................', { align: 'right' });
+    } else {
+      // Information sur la signature
+      doc.moveDown(2)
+         .fontSize(12)
+         .text('Document signé électroniquement', { align: 'center' })
+         .moveDown()
+         .fontSize(10)
+         .text(`Signé le: ${new Date(planning.signedAt).toLocaleDateString('fr-FR')}`, { align: 'center' });
+      
+      if (planning.signatureId) {
+        doc.text(`Référence signature: ${planning.signatureId}`, { align: 'center' });
+      }
+    }
+    
+    // Pied de page avec numéro de page
+    const totalPages = doc.bufferedPageRange().count;
+    for (let i = 0; i < totalPages; i++) {
+      doc.switchToPage(i);
+      
+      doc.fontSize(8)
+         .text(
+           `Page ${i + 1} / ${totalPages}`,
+           50,
+           doc.page.height - 50,
+           { align: 'center' }
+         );
+      
+      doc.fontSize(8)
+         .text(
+           'EHPAD Belleviste - Document généré par EHPAD Connect',
+           50,
+           doc.page.height - 30,
+           { align: 'center' }
+         );
     }
   }
   
   /**
-   * Obtient la taille d'un fichier
+   * Formate le statut pour l'affichage
+   * @param {String} status - Statut à formater
+   * @returns {String} Statut formaté
+   */
+  formatStatus(status) {
+    switch (status) {
+      case 'draft': return 'Brouillon';
+      case 'confirmed': return 'Confirmé';
+      case 'pending': return 'En attente';
+      case 'modified': return 'Modifié';
+      case 'signed': return 'Signé';
+      case 'published': return 'Publié';
+      default: return status;
+    }
+  }
+  
+  /**
+   * Retourne le nom du mois à partir de son numéro
+   * @param {Number} month - Numéro du mois (1-12)
+   * @returns {String} Nom du mois
+   */
+  getMonthName(month) {
+    const months = [
+      'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+    ];
+    
+    return months[month - 1] || '';
+  }
+  
+  /**
+   * Retourne le nom du jour à partir de son numéro
+   * @param {Number} day - Numéro du jour (0-6, 0 = dimanche)
+   * @returns {String} Nom abrégé du jour
+   */
+  getDayName(day) {
+    const days = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+    return days[day] || '';
+  }
+  
+  /**
+   * Récupère la taille d'un fichier
    * @param {String} filePath - Chemin du fichier
    * @returns {Promise<Number>} Taille du fichier en octets
    */
@@ -172,115 +317,16 @@ class PDFService {
   /**
    * Supprime un fichier temporaire
    * @param {String} filePath - Chemin du fichier
+   * @returns {Promise<Boolean>} Succès de la suppression
    */
   async deleteTempFile(filePath) {
     try {
       await fs.unlink(filePath);
       logger.debug(`Fichier temporaire supprimé: ${filePath}`);
+      return true;
     } catch (error) {
       logger.warn(`Erreur lors de la suppression du fichier temporaire: ${error.message}`);
-    }
-  }
-  
-  /**
-   * Organise les services par semaine pour l'affichage calendrier
-   */
-  organizeCalendarByWeek(year, month, shifts) {
-    // Obtenir le premier jour du mois
-    const firstDay = new Date(year, month - 1, 1);
-    // Jour de la semaine (0-6, 0 = Dimanche)
-    let firstDayOfWeek = firstDay.getDay();
-    // En France, la semaine commence le lundi (1)
-    if (firstDayOfWeek === 0) firstDayOfWeek = 7;
-    
-    // Nombre de jours dans le mois
-    const daysInMonth = new Date(year, month, 0).getDate();
-    
-    // Créer un mapping des services par date
-    const shiftsByDate = {};
-    shifts.forEach(shift => {
-      const day = new Date(shift.date).getDate();
-      shiftsByDate[day] = shift;
-    });
-    
-    // Organiser les jours en semaines
-    const calendar = [];
-    let week = [];
-    
-    // Ajouter les jours vides au début
-    for (let i = 1; i < firstDayOfWeek; i++) {
-      week.push(null);
-    }
-    
-    // Ajouter les jours du mois
-    for (let day = 1; day <= daysInMonth; day++) {
-      const shift = shiftsByDate[day] || {
-        date: new Date(year, month - 1, day).toISOString().split('T')[0],
-        shiftType: 'rest',
-        status: 'confirmed'
-      };
-      
-      week.push({
-        day,
-        shift: {
-          ...shift,
-          typeName: this.getShiftTypeName(shift.shiftType),
-          statusName: this.getStatusName(shift.status)
-        }
-      });
-      
-      // Si c'est la fin de la semaine ou le dernier jour du mois, ajouter la semaine au calendrier
-      if (week.length === 7 || day === daysInMonth) {
-        // Remplir la dernière semaine avec des jours vides si nécessaire
-        while (week.length < 7) {
-          week.push(null);
-        }
-        
-        calendar.push(week);
-        week = [];
-      }
-    }
-    
-    return calendar;
-  }
-  
-  /**
-   * Obtient le nom lisible du type de service
-   * @param {String} shiftType - Type de service (morning, afternoon, night, rest)
-   * @returns {String} Nom lisible
-   */
-  getShiftTypeName(shiftType) {
-    switch (shiftType) {
-      case 'morning':
-        return 'Matin';
-      case 'afternoon':
-        return 'Après-midi';
-      case 'night':
-        return 'Nuit';
-      case 'rest':
-        return 'Repos';
-      default:
-        return shiftType;
-    }
-  }
-  
-  /**
-   * Obtient le nom lisible du statut
-   * @param {String} status - Statut (draft, confirmed, pending, modified)
-   * @returns {String} Nom lisible
-   */
-  getStatusName(status) {
-    switch (status) {
-      case 'draft':
-        return 'Brouillon';
-      case 'confirmed':
-        return 'Confirmé';
-      case 'pending':
-        return 'En attente';
-      case 'modified':
-        return 'Modifié';
-      default:
-        return status;
+      return false;
     }
   }
 }
