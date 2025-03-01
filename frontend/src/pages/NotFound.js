@@ -1,68 +1,53 @@
 import React from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { 
-  Box, 
-  Typography, 
-  Button, 
-  Container, 
-  Paper 
-} from '@mui/material';
-import { SentimentDissatisfied } from '@mui/icons-material';
+import { Box, Typography, Button, Container, Paper } from '@mui/material';
+import { Home as HomeIcon } from '@mui/icons-material';
 
 /**
- * Page 404 - Page non trouvée
+ * Page 404 pour les routes inexistantes
  */
 const NotFound = () => {
   return (
-    <Container maxWidth="md">
-      <Paper elevation={3} sx={{ p: 5, mt: 10, textAlign: 'center' }}>
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            mb: 4,
-          }}
+    <Container maxWidth="md" sx={{ display: 'flex', alignItems: 'center', minHeight: '100vh' }}>
+      <Paper
+        elevation={3}
+        sx={{
+          width: '100%',
+          p: 5,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          textAlign: 'center',
+        }}
+      >
+        <Typography
+          variant="h1"
+          component="h1"
+          color="primary"
+          sx={{ fontSize: { xs: '4rem', md: '8rem' }, fontWeight: 700, mb: 2 }}
         >
-          <SentimentDissatisfied color="primary" sx={{ fontSize: 80, mb: 2 }} />
-          
-          <Typography variant="h3" component="h1" gutterBottom>
-            404
-          </Typography>
-          
-          <Typography variant="h5" component="h2" gutterBottom>
-            Page non trouvée
-          </Typography>
-          
-          <Typography variant="body1" color="text.secondary" paragraph>
-            La page que vous recherchez n'existe pas ou a été déplacée.
-          </Typography>
-          
-          <Box sx={{ mt: 3 }}>
-            <Button
-              variant="contained"
-              color="primary"
-              component={RouterLink}
-              to="/"
-              sx={{ mr: 1 }}
-            >
-              Retour à l'accueil
-            </Button>
-            
-            <Button
-              variant="outlined"
-              color="primary"
-              component={RouterLink}
-              to="/planning"
-            >
-              Voir mon planning
-            </Button>
-          </Box>
-        </Box>
-        
-        <Typography variant="body2" color="text.secondary">
-          Si le problème persiste, veuillez contacter le support technique.
+          404
         </Typography>
+        
+        <Typography variant="h4" component="h2" gutterBottom>
+          Page introuvable
+        </Typography>
+        
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 4, maxWidth: '600px' }}>
+          La page que vous recherchez n'existe pas. Elle a peut-être été déplacée, supprimée,
+          ou n'a jamais existé. Vérifiez l'URL ou retournez à l'accueil.
+        </Typography>
+        
+        <Button
+          component={RouterLink}
+          to="/"
+          variant="contained"
+          size="large"
+          startIcon={<HomeIcon />}
+          sx={{ py: 1.5, px: 3, fontSize: '1rem' }}
+        >
+          Retour à l'accueil
+        </Button>
       </Paper>
     </Container>
   );
