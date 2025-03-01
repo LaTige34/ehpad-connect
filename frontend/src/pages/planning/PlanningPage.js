@@ -1,265 +1,520 @@
 import React, { useState, useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import {
   Box,
-  Paper,
   Typography,
+  Paper,
   Grid,
-  Tabs,
-  Tab,
   Button,
   IconButton,
-  Chip,
-  CircularProgress,
-  Alert,
-  Tooltip,
-  Select,
+  Menu,
   MenuItem,
   FormControl,
-  InputLabel
+  InputLabel,
+  Select,
+  Tabs,
+  Tab,
+  Skeleton,
+  Alert,
+  Chip,
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Card,
+  CardContent
 } from '@mui/material';
 import {
-  NavigateBefore,
-  NavigateNext,
-  CalendarMonth,
-  FileDownload,
-  Email
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
+  Today as TodayIcon,
+  FilterList as FilterIcon,
+  Download as DownloadIcon,
+  HourglassTop as HourglassTopIcon,
+  Check as CheckIcon,
+  Edit as EditIcon
 } from '@mui/icons-material';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, isSameDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, parseISO, isWeekend } from 'date-fns';
 import { fr } from 'date-fns/locale';
-
-// Import des composants personnalisés
-import MonthlyCalendar from '../../components/planning/MonthlyCalendar';
-import WeeklyCalendar from '../../components/planning/WeeklyCalendar';
-import PlanningDetails from '../../components/planning/PlanningDetails';
 
 /**
  * Page de planning
  */
 const PlanningPage = () => {
-  const [view, setView] = useState('month');
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDay, setSelectedDay] = useState(new Date());
-  
-  const dispatch = useDispatch();
-  
-  // Données simulées pour le tableau de bord
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [tabValue, setTabValue] = useState(0);
+  const [filterAnchorEl, setFilterAnchorEl] = useState(null);
+  const [selectedShift, setSelectedShift] = useState(null);
   
-  // Données de planning simulées
-  const [planningData, setPlanningData] = useState([]);
+  // Données simulées pour le développement
+  const [planning, setPlanning] = useState([]);
+  const [dialogOpen, setDialogOpen] = useState(false);
   
-  // Simuler le chargement des données
+  const user = useSelector(state => state.auth.user);
+  
   useEffect(() => {
-    setIsLoading(true);
+    // Simuler le chargement du planning
+    const loadPlanning = async () => {
+      try {
+        // Dans une application réelle, ces données seraient chargées depuis l'API
+        // const response = await planningService.getMonthlyPlanning(format(currentDate, 'yyyy-MM'));
+        
+        // Données simulées pour le développement
+        setTimeout(() => {
+          // Générer des données pour chaque jour du mois
+          const start = startOfMonth(currentDate);
+          const end = endOfMonth(currentDate);
+          const days = eachDayOfInterval({ start, end });
+          
+          const shifts = ['Matin', 'Après-midi', 'Nuit', 'Repos'];
+          const services = ['Service A', 'Service B', 'Service C'];
+          const hours = {
+            'Matin': '7h - 15h',
+            'Après-midi': '15h - 23h',
+            'Nuit': '23h - 7h',
+            'Repos': ''
+          };
+          
+          const generatedPlanning = days.map(day => {
+            // Pas de service le weekend (70% de chances)
+            if (isWeekend(day) && Math.random() < 0.7) {
+              return {
+                date: format(day, 'yyyy-MM-dd'),
+                shift: 'Repos',
+                hours: '',
+                service: '',
+                status: 'confirmed'
+              };
+            }
+            
+            const shiftIndex = Math.floor(Math.random() * 4); // 0-3
+            const shift = shifts[shiftIndex];
+            
+            return {
+              date: format(day, 'yyyy-MM-dd'),
+              shift,
+              hours: hours[shift],
+              service: shift === 'Repos' ? '' : services[Math.floor(Math.random() * services.length)],
+              status: Math.random() < 0.8 ? 'confirmed' : 'pending'
+            };
+          });
+          
+          setPlanning(generatedPlanning);
+          setLoading(false);
+        }, 1000);
+      } catch (err) {
+        console.error('Erreur lors du chargement du planning:', err);
+        setError('Impossible de charger le planning. Veuillez réessayer plus tard.');
+        setLoading(false);
+      }
+    };
     
-    // Simuler un appel API
-    setTimeout(() => {
-      const startDate = startOfMonth(currentDate);
-      const endDate = endOfMonth(currentDate);
-      const daysInMonth = eachDayOfInterval({ start: startDate, end: endDate });
-      
-      // Générer des données simulées pour chaque jour
-      const data = daysInMonth.map(day => {
-        const dayOfWeek = day.getDay();
-        let shift = null;
-        let hours = null;
-        let department = null;
-        
-        // Weekends = repos
-        if (dayOfWeek === 0 || dayOfWeek === 6) {
-          shift = 'Repos';
-        } else {
-          // Alterner les services du lundi au vendredi
-          if (dayOfWeek % 2 === 1) {
-            shift = 'Matin';
-            hours = '7h - 15h';
-            department = 'Service A';
-          } else {
-            shift = 'Après-midi';
-            hours = '15h - 23h';
-            department = 'Service B';
-          }
-        }
-        
-        return {
-          date: day,
-          shift,
-          hours,
-          department,
-          isModified: Math.random() > 0.8 // 20% de chances d'être modifié
-        };
-      });
-      
-      setPlanningData(data);
-      setIsLoading(false);
-    }, 800);
+    setLoading(true);
+    loadPlanning();
   }, [currentDate]);
   
-  // Gestion des changements de vue
-  const handleViewChange = (event, newValue) => {
-    setView(newValue);
-  };
-  
-  // Navigation entre les mois
   const handlePreviousMonth = () => {
-    setCurrentDate(prevDate => addMonths(prevDate, -1));
+    setCurrentDate(subMonths(currentDate, 1));
   };
   
   const handleNextMonth = () => {
-    setCurrentDate(prevDate => addMonths(prevDate, 1));
+    setCurrentDate(addMonths(currentDate, 1));
   };
   
-  // Sélection d'un jour
-  const handleDaySelect = (day) => {
-    setSelectedDay(day);
+  const handleToday = () => {
+    setCurrentDate(new Date());
   };
   
-  // Exporter le planning
-  const handleExportPlanning = () => {
-    alert('Export du planning en PDF (simulation)');
+  const handleTabChange = (event, newValue) => {
+    setTabValue(newValue);
   };
   
-  // Envoyer le planning par email
-  const handleSendByEmail = () => {
-    alert('Envoi du planning par email à mathieu.desobry@ehpadbelleviste.fr (simulation)');
+  const handleFilterClick = (event) => {
+    setFilterAnchorEl(event.currentTarget);
   };
   
-  // Trouver les détails du jour sélectionné
-  const selectedDayDetails = planningData.find(day => 
-    day.date && selectedDay && isSameDay(day.date, selectedDay)
-  );
+  const handleFilterClose = () => {
+    setFilterAnchorEl(null);
+  };
+  
+  const handleDownload = () => {
+    // Dans une application réelle, cette fonction téléchargerait le planning
+    alert('Téléchargement du planning au format PDF');
+  };
+  
+  const handleDayClick = (day) => {
+    // Trouver le shift pour ce jour
+    const shift = planning.find(p => p.date === format(day, 'yyyy-MM-dd'));
+    if (shift) {
+      setSelectedShift(shift);
+      setDialogOpen(true);
+    }
+  };
+  
+  const handleDialogClose = () => {
+    setDialogOpen(false);
+    setSelectedShift(null);
+  };
+  
+  const renderCalendar = () => {
+    const start = startOfMonth(currentDate);
+    const end = endOfMonth(currentDate);
+    const days = eachDayOfInterval({ start, end });
+    
+    // Créer une grille 7x6 pour le calendrier
+    const weekDays = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+    
+    const getShiftForDay = (day) => {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      return planning.find(p => p.date === dateStr);
+    };
+    
+    const getShiftColor = (shift) => {
+      if (!shift) return 'grey.200';
+      
+      switch (shift.shift) {
+        case 'Matin': return 'primary.light';
+        case 'Après-midi': return 'secondary.light';
+        case 'Nuit': return 'info.light';
+        case 'Repos': return 'grey.100';
+        default: return 'grey.200';
+      }
+    };
+    
+    const getShiftTextColor = (shift) => {
+      if (!shift) return 'text.primary';
+      
+      switch (shift.shift) {
+        case 'Matin': return 'primary.dark';
+        case 'Après-midi': return 'secondary.dark';
+        case 'Nuit': return 'info.dark';
+        default: return 'text.primary';
+      }
+    };
+    
+    return (
+      <Box>
+        {/* En-têtes des jours de la semaine */}
+        <Grid container>
+          {weekDays.map(day => (
+            <Grid item xs key={day} sx={{ textAlign: 'center', py: 1, fontWeight: 'bold' }}>
+              {day}
+            </Grid>
+          ))}
+        </Grid>
+        
+        {/* Jours du mois */}
+        <Grid container>
+          {/* Espaces vides pour aligner les jours correctement */}
+          {Array.from({ length: start.getDay() === 0 ? 6 : start.getDay() - 1 }).map((_, i) => (
+            <Grid item xs key={`empty-${i}`} sx={{ height: 90 }}></Grid>
+          ))}
+          
+          {/* Jours du mois */}
+          {days.map(day => {
+            const shift = getShiftForDay(day);
+            
+            return (
+              <Grid item xs key={format(day, 'yyyy-MM-dd')} sx={{ position: 'relative' }}>
+                <Paper 
+                  elevation={0} 
+                  sx={{ 
+                    height: 90,
+                    p: 1, 
+                    m: 0.5,
+                    backgroundColor: getShiftColor(shift),
+                    color: getShiftTextColor(shift),
+                    border: isSameDay(day, new Date()) ? '2px solid' : 'none',
+                    borderColor: 'primary.main',
+                    cursor: 'pointer',
+                    '&:hover': {
+                      elevation: 2,
+                      opacity: 0.9
+                    }
+                  }}
+                  onClick={() => handleDayClick(day)}
+                >
+                  <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                    {format(day, 'd')}
+                  </Typography>
+                  
+                  {loading ? (
+                    <Box>
+                      <Skeleton variant="text" width="80%" />
+                      <Skeleton variant="text" width="60%" />
+                    </Box>
+                  ) : shift ? (
+                    <>
+                      <Typography variant="caption" display="block" fontWeight="bold">
+                        {shift.shift}
+                      </Typography>
+                      {shift.hours && (
+                        <Typography variant="caption" display="block">
+                          {shift.hours}
+                        </Typography>
+                      )}
+                      {shift.service && (
+                        <Typography variant="caption" display="block">
+                          {shift.service}
+                        </Typography>
+                      )}
+                      
+                      {shift.status === 'pending' && (
+                        <Tooltip title="En attente de validation">
+                          <Box
+                            sx={{
+                              position: 'absolute',
+                              top: 5,
+                              right: 5,
+                              width: 10,
+                              height: 10,
+                              borderRadius: '50%',
+                              backgroundColor: 'warning.main'
+                            }}
+                          />
+                        </Tooltip>
+                      )}
+                    </>
+                  ) : null}
+                </Paper>
+              </Grid>
+            );
+          })}
+        </Grid>
+      </Box>
+    );
+  };
+  
+  const renderListView = () => {
+    // Filtrer les jours qui ont un service (pas de repos)
+    const workDays = planning.filter(p => p.shift !== 'Repos');
+    
+    return (
+      <Box sx={{ mt: 2 }}>
+        {workDays.map((day) => (
+          <Card key={day.date} sx={{ mb: 2 }}>
+            <CardContent>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} sm={3}>
+                  <Typography variant="h6">
+                    {format(parseISO(day.date), 'EEEE d MMMM', { locale: fr })}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <Chip 
+                    label={day.shift} 
+                    color={
+                      day.shift === 'Matin' ? 'primary' : 
+                      day.shift === 'Après-midi' ? 'secondary' : 
+                      'info'
+                    }
+                  />
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <Typography variant="body1">{day.hours}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={3}>
+                  <Typography variant="body2">{day.service}</Typography>
+                  {day.status === 'pending' && (
+                    <Chip 
+                      size="small" 
+                      icon={<HourglassTopIcon />} 
+                      label="En attente" 
+                      color="warning" 
+                      variant="outlined"
+                      sx={{ mt: 1 }}
+                    />
+                  )}
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        ))}
+        
+        {workDays.length === 0 && (
+          <Typography variant="body1" color="text.secondary" sx={{ textAlign: 'center', mt: 3 }}>
+            Aucun jour travaillé ce mois-ci.
+          </Typography>
+        )}
+      </Box>
+    );
+  };
   
   return (
     <Box>
-      <Grid container spacing={3}>
-        <Grid item xs={12}>
-          <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-            <Typography variant="h4" component="h1">
-              Mon Planning
+      <Typography variant="h4" component="h1" gutterBottom>
+        Planning
+      </Typography>
+      
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
+      )}
+      
+      <Paper sx={{ p: 3, mb: 3 }}>
+        {/* Contrôles de navigation et filtres */}
+        <Grid container spacing={2} alignItems="center" sx={{ mb: 3 }}>
+          <Grid item>
+            <IconButton onClick={handlePreviousMonth} disabled={loading}>
+              <ChevronLeftIcon />
+            </IconButton>
+            <IconButton onClick={handleNextMonth} disabled={loading}>
+              <ChevronRightIcon />
+            </IconButton>
+          </Grid>
+          
+          <Grid item>
+            <Typography variant="h5">
+              {format(currentDate, 'MMMM yyyy', { locale: fr })}
             </Typography>
-            <Box>
-              <Button 
-                variant="outlined" 
-                startIcon={<FileDownload />}
-                onClick={handleExportPlanning}
-                sx={{ mr: 1 }}
+          </Grid>
+          
+          <Grid item>
+            <Button 
+              size="small" 
+              startIcon={<TodayIcon />} 
+              onClick={handleToday}
+              disabled={loading}
+            >
+              Aujourd'hui
+            </Button>
+          </Grid>
+          
+          <Grid item sx={{ flexGrow: 1 }}></Grid>
+          
+          <Grid item>
+            <Button 
+              size="small" 
+              startIcon={<FilterIcon />} 
+              onClick={handleFilterClick}
+              disabled={loading}
+            >
+              Filtrer
+            </Button>
+            <Menu
+              anchorEl={filterAnchorEl}
+              open={Boolean(filterAnchorEl)}
+              onClose={handleFilterClose}
+            >
+              <MenuItem onClick={handleFilterClose}>Tous</MenuItem>
+              <MenuItem onClick={handleFilterClose}>Matin</MenuItem>
+              <MenuItem onClick={handleFilterClose}>Après-midi</MenuItem>
+              <MenuItem onClick={handleFilterClose}>Nuit</MenuItem>
+              <MenuItem onClick={handleFilterClose}>Jours travaillés</MenuItem>
+            </Menu>
+          </Grid>
+          
+          <Grid item>
+            <Button 
+              variant="outlined" 
+              startIcon={<DownloadIcon />} 
+              onClick={handleDownload}
+              disabled={loading}
+            >
+              Télécharger
+            </Button>
+          </Grid>
+        </Grid>
+        
+        {/* Onglets vue calendrier / vue liste */}
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+          <Tabs value={tabValue} onChange={handleTabChange} aria-label="vues du planning">
+            <Tab label="Vue calendrier" id="tab-0" />
+            <Tab label="Vue liste" id="tab-1" />
+          </Tabs>
+        </Box>
+        
+        {/* Contenu du planning */}
+        <Box role="tabpanel" hidden={tabValue !== 0}>
+          {tabValue === 0 && renderCalendar()}
+        </Box>
+        
+        <Box role="tabpanel" hidden={tabValue !== 1}>
+          {tabValue === 1 && renderListView()}
+        </Box>
+      </Paper>
+      
+      {/* Légende */}
+      <Paper sx={{ p: 2 }}>
+        <Typography variant="subtitle2" gutterBottom>
+          Légende :
+        </Typography>
+        <Grid container spacing={2}>
+          <Grid item>
+            <Chip label="Matin" color="primary" size="small" />
+          </Grid>
+          <Grid item>
+            <Chip label="Après-midi" color="secondary" size="small" />
+          </Grid>
+          <Grid item>
+            <Chip label="Nuit" color="info" size="small" />
+          </Grid>
+          <Grid item>
+            <Chip 
+              icon={<HourglassTopIcon />} 
+              label="En attente" 
+              color="warning" 
+              variant="outlined"
+              size="small" 
+            />
+          </Grid>
+        </Grid>
+      </Paper>
+      
+      {/* Dialogue de détail du jour */}
+      <Dialog open={dialogOpen} onClose={handleDialogClose} maxWidth="sm" fullWidth>
+        {selectedShift && (
+          <>
+            <DialogTitle>
+              {format(parseISO(selectedShift.date), 'EEEE d MMMM yyyy', { locale: fr })}
+            </DialogTitle>
+            <DialogContent>
+              <Grid container spacing={2} sx={{ mt: 1 }}>
+                <Grid item xs={4}>
+                  <Typography variant="subtitle2">Service :</Typography>
+                  <Typography variant="body1">{selectedShift.shift}</Typography>
+                </Grid>
+                <Grid item xs={4}>
+                  <Typography variant="subtitle2">Horaires :</Typography>
+                  <Typography variant="body1">{selectedShift.hours || 'N/A'}</Typography>
+                </Grid>
+                <Grid item xs={4}>
+                  <Typography variant="subtitle2">Unité :</Typography>
+                  <Typography variant="body1">{selectedShift.service || 'N/A'}</Typography>
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2">Statut :</Typography>
+                  <Chip 
+                    icon={selectedShift.status === 'confirmed' ? <CheckIcon /> : <HourglassTopIcon />}
+                    label={selectedShift.status === 'confirmed' ? 'Confirmé' : 'En attente de validation'} 
+                    color={selectedShift.status === 'confirmed' ? 'success' : 'warning'} 
+                    variant="outlined"
+                  />
+                </Grid>
+              </Grid>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handleDialogClose}>
+                Fermer
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<DownloadIcon />}
+                onClick={() => {
+                  alert(`Téléchargement du planning pour le ${format(parseISO(selectedShift.date), 'dd/MM/yyyy')}`);
+                  handleDialogClose();
+                }}
               >
                 Exporter
               </Button>
-              <Button 
-                variant="outlined" 
-                startIcon={<Email />}
-                onClick={handleSendByEmail}
-              >
-                Envoyer par email
-              </Button>
-            </Box>
-          </Box>
-        </Grid>
-        
-        <Grid item xs={12}>
-          <Paper sx={{ mb: 3 }}>
-            <Box p={2} display="flex" alignItems="center" justifyContent="space-between">
-              <Box display="flex" alignItems="center">
-                <IconButton onClick={handlePreviousMonth}>
-                  <NavigateBefore />
-                </IconButton>
-                <Typography variant="h6" sx={{ mx: 2 }}>
-                  {format(currentDate, 'MMMM yyyy', { locale: fr })}
-                </Typography>
-                <IconButton onClick={handleNextMonth}>
-                  <NavigateNext />
-                </IconButton>
-              </Box>
-              
-              <Tabs value={view} onChange={handleViewChange} aria-label="vue planning">
-                <Tab value="month" label="Mois" icon={<CalendarMonth />} iconPosition="start" />
-                <Tab value="week" label="Semaine" />
-              </Tabs>
-              
-              <Box>
-                <FormControl sx={{ minWidth: 120 }}>
-                  <InputLabel id="service-select-label">Service</InputLabel>
-                  <Select
-                    labelId="service-select-label"
-                    id="service-select"
-                    value="all"
-                    label="Service"
-                    size="small"
-                  >
-                    <MenuItem value="all">Tous</MenuItem>
-                    <MenuItem value="A">Service A</MenuItem>
-                    <MenuItem value="B">Service B</MenuItem>
-                  </Select>
-                </FormControl>
-              </Box>
-            </Box>
-          </Paper>
-        </Grid>
-        
-        <Grid item xs={12} md={8}>
-          <Paper sx={{ p: 2, height: '100%' }}>
-            {isLoading ? (
-              <Box display="flex" justifyContent="center" alignItems="center" height="400px">
-                <CircularProgress />
-              </Box>
-            ) : error ? (
-              <Alert severity="error">{error}</Alert>
-            ) : (
-              <>
-                {view === 'month' ? (
-                  <MonthlyCalendar 
-                    currentDate={currentDate}
-                    planningData={planningData}
-                    onDaySelect={handleDaySelect}
-                    selectedDay={selectedDay}
-                  />
-                ) : (
-                  <WeeklyCalendar 
-                    currentDate={currentDate}
-                    planningData={planningData}
-                    onDaySelect={handleDaySelect}
-                    selectedDay={selectedDay}
-                  />
-                )}
-              </>
-            )}
-          </Paper>
-        </Grid>
-        
-        <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 3, height: '100%' }}>
-            <Typography variant="h6" gutterBottom>
-              Détails du jour
-            </Typography>
-            {selectedDayDetails ? (
-              <PlanningDetails day={selectedDayDetails} />
-            ) : (
-              <Typography variant="body1" color="text.secondary">
-                Sélectionnez un jour pour voir les détails
-              </Typography>
-            )}
-          </Paper>
-        </Grid>
-        
-        <Grid item xs={12}>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Légende
-            </Typography>
-            <Box display="flex" gap={2} flexWrap="wrap">
-              <Chip label="Matin (7h-15h)" sx={{ backgroundColor: '#bbdefb' }} />
-              <Chip label="Après-midi (15h-23h)" sx={{ backgroundColor: '#c8e6c9' }} />
-              <Chip label="Nuit (23h-7h)" sx={{ backgroundColor: '#d1c4e9' }} />
-              <Chip label="Repos" sx={{ backgroundColor: '#f5f5f5' }} />
-              <Chip label="Modifié récemment" color="warning" />
-              <Chip label="Jour sélectionné" color="primary" />
-            </Box>
-          </Paper>
-        </Grid>
-      </Grid>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
     </Box>
   );
 };
