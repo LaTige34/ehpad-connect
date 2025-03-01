@@ -1,339 +1,515 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Typography, 
-  Box, 
-  Paper, 
-  Tabs, 
-  Tab, 
-  List, 
-  ListItem, 
-  ListItemText, 
-  ListItemIcon, 
-  ListItemSecondaryAction, 
-  Chip, 
-  IconButton, 
-  Button, 
-  Divider, 
-  TextField, 
+import {
+  Box,
+  Typography,
+  Paper,
+  Grid,
+  TextField,
   InputAdornment,
+  Tabs,
+  Tab,
+  Card,
+  CardContent,
+  CardActions,
+  Button,
+  Chip,
+  IconButton,
+  Skeleton,
+  Alert,
+  Divider,
   Menu,
   MenuItem,
-  CircularProgress
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction
 } from '@mui/material';
-import { 
-  Description, 
-  DescriptionOutlined, 
-  Search, 
-  FilterList, 
-  ArrowDownward, 
-  ArrowUpward, 
-  MoreVert, 
-  Download, 
-  Email, 
-  OpenInNew 
+import {
+  Search as SearchIcon,
+  FilterList as FilterIcon,
+  PictureAsPdf as PdfIcon,
+  Description as DocIcon,
+  CheckCircle as CheckCircleIcon,
+  Pending as PendingIcon,
+  Schedule as ScheduleIcon,
+  MoreVert as MoreVertIcon,
+  ArrowDownward as ArrowDownwardIcon,
+  ArrowUpward as ArrowUpwardIcon,
+  Email as EmailIcon
 } from '@mui/icons-material';
 
 /**
- * Page listant les documents
+ * Page de liste des documents
  */
 const DocumentList = () => {
   const navigate = useNavigate();
-  
-  // État pour les filtres et le tri
-  const [filter, setFilter] = useState('all');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [sortDirection, setSortDirection] = useState('desc');
-  const [isLoading, setIsLoading] = useState(false);
-  
-  // Menu des actions
-  const [menuAnchorEl, setMenuAnchorEl] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [tabValue, setTabValue] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterAnchorEl, setFilterAnchorEl] = useState(null);
+  const [sortAnchorEl, setSortAnchorEl] = useState(null);
+  const [documentMenuAnchorEl, setDocumentMenuAnchorEl] = useState(null);
   const [selectedDocumentId, setSelectedDocumentId] = useState(null);
   
-  // Données simulées de documents
+  // Données simulées pour le développement
   const [documents, setDocuments] = useState([]);
   
-  // Simuler le chargement des données
   useEffect(() => {
-    setIsLoading(true);
+    // Simuler le chargement des documents
+    const loadDocuments = async () => {
+      try {
+        // Dans une application réelle, ces données seraient chargées depuis l'API
+        // const response = await documentService.getUserDocuments();
+        
+        // Données simulées pour le développement
+        setTimeout(() => {
+          const mockDocuments = [
+            {
+              id: 1,
+              title: 'Contrat de travail',
+              type: 'contract',
+              status: 'signed',
+              createdAt: '2025-01-10T10:30:00Z',
+              signedAt: '2025-01-15T14:22:10Z',
+              fileSize: '540 KB',
+              fileType: 'application/pdf'
+            },
+            {
+              id: 2,
+              title: 'Avenant au contrat',
+              type: 'amendment',
+              status: 'pending',
+              createdAt: '2025-02-28T09:15:00Z',
+              fileSize: '320 KB',
+              fileType: 'application/pdf'
+            },
+            {
+              id: 3,
+              title: 'Fiche de poste',
+              type: 'info',
+              status: 'read',
+              createdAt: '2025-02-05T11:45:00Z',
+              fileSize: '210 KB',
+              fileType: 'application/pdf'
+            },
+            {
+              id: 4,
+              title: 'Planning Mars 2025',
+              type: 'planning',
+              status: 'pending',
+              createdAt: '2025-02-29T16:20:00Z',
+              fileSize: '450 KB',
+              fileType: 'application/pdf'
+            },
+            {
+              id: 5,
+              title: 'Note de service - Horaires d\'été',
+              type: 'info',
+              status: 'unread',
+              createdAt: '2025-02-20T14:10:00Z',
+              fileSize: '180 KB',
+              fileType: 'application/pdf'
+            }
+          ];
+          
+          setDocuments(mockDocuments);
+          setLoading(false);
+        }, 1000);
+      } catch (err) {
+        console.error('Erreur lors du chargement des documents:', err);
+        setError('Impossible de charger les documents. Veuillez réessayer plus tard.');
+        setLoading(false);
+      }
+    };
     
-    // Simuler un appel API
-    setTimeout(() => {
-      const mockDocuments = [
-        {
-          id: 1,
-          title: 'Contrat de travail',
-          date: '15/01/2025',
-          status: 'signed',
-          type: 'contract'
-        },
-        {
-          id: 2,
-          title: 'Avenant au contrat',
-          date: '28/02/2025',
-          status: 'pending',
-          type: 'amendment'
-        },
-        {
-          id: 3,
-          title: 'Fiche de poste',
-          date: '05/02/2025',
-          status: 'read',
-          type: 'info'
-        },
-        {
-          id: 4,
-          title: 'Planning Février 2025',
-          date: '01/02/2025',
-          status: 'signed',
-          type: 'planning'
-        },
-        {
-          id: 5,
-          title: 'Planning Mars 2025',
-          date: '01/03/2025',
-          status: 'pending',
-          type: 'planning'
-        }
-      ];
-      
-      setDocuments(mockDocuments);
-      setIsLoading(false);
-    }, 800);
+    loadDocuments();
   }, []);
   
-  // Changement de filtre
-  const handleFilterChange = (event, newValue) => {
-    setFilter(newValue);
+  const handleTabChange = (event, newValue) => {
+    setTabValue(newValue);
   };
   
-  // Changement de recherche
   const handleSearchChange = (event) => {
-    setSearchTerm(event.target.value);
+    setSearchQuery(event.target.value);
   };
   
-  // Changer la direction de tri
-  const toggleSortDirection = () => {
-    setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+  const handleFilterClick = (event) => {
+    setFilterAnchorEl(event.currentTarget);
   };
   
-  // Ouvrir le menu des actions
-  const handleMenuOpen = (event, documentId) => {
-    setMenuAnchorEl(event.currentTarget);
+  const handleFilterClose = () => {
+    setFilterAnchorEl(null);
+  };
+  
+  const handleSortClick = (event) => {
+    setSortAnchorEl(event.currentTarget);
+  };
+  
+  const handleSortClose = () => {
+    setSortAnchorEl(null);
+  };
+  
+  const handleDocumentMenuClick = (event, documentId) => {
+    setDocumentMenuAnchorEl(event.currentTarget);
     setSelectedDocumentId(documentId);
   };
   
-  // Fermer le menu des actions
-  const handleMenuClose = () => {
-    setMenuAnchorEl(null);
+  const handleDocumentMenuClose = () => {
+    setDocumentMenuAnchorEl(null);
     setSelectedDocumentId(null);
   };
   
-  // Télécharger un document
-  const handleDownload = (documentId) => {
-    alert(`Téléchargement du document ${documentId} (simulation)`);
-    handleMenuClose();
-  };
-  
-  // Envoyer un document par email
-  const handleSendByEmail = (documentId) => {
-    alert(`Envoi du document ${documentId} par email à mathieu.desobry@ehpadbelleviste.fr (simulation)`);
-    handleMenuClose();
-  };
-  
-  // Consulter un document
   const handleViewDocument = (documentId) => {
     navigate(`/documents/${documentId}`);
   };
   
-  // Signer un document
   const handleSignDocument = (documentId) => {
     navigate(`/documents/${documentId}/sign`);
   };
   
-  // Filtrer les documents selon les critères
-  const filteredDocuments = documents.filter(doc => {
-    // Filtrer par type
-    if (filter !== 'all' && doc.type !== filter) {
-      return false;
-    }
-    
-    // Filtrer par terme de recherche
-    if (searchTerm && !doc.title.toLowerCase().includes(searchTerm.toLowerCase())) {
-      return false;
-    }
-    
-    return true;
-  });
+  const handleEmailDocument = (documentId) => {
+    // Dans une application réelle, cette fonction ouvrirait une boîte de dialogue pour envoyer par email
+    alert(`Email du document ${documentId} envoyé à mathieu.desobry@ehpadbelleviste.fr`);
+  };
   
-  // Trier les documents
-  const sortedDocuments = [...filteredDocuments].sort((a, b) => {
-    const dateA = new Date(a.date.split('/').reverse().join('-'));
-    const dateB = new Date(b.date.split('/').reverse().join('-'));
-    
-    return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
-  });
-  
-  // Obtenir la puce de statut
   const getStatusChip = (status) => {
     switch (status) {
       case 'signed':
-        return <Chip label="Signé" color="success" size="small" />;
+        return (
+          <Chip 
+            icon={<CheckCircleIcon />} 
+            label="Signé" 
+            color="success" 
+            size="small" 
+            variant="outlined" 
+          />
+        );
       case 'pending':
-        return <Chip label="À signer" color="warning" size="small" />;
+        return (
+          <Chip 
+            icon={<PendingIcon />} 
+            label="À signer" 
+            color="warning" 
+            size="small" 
+            variant="outlined" 
+          />
+        );
+      case 'unread':
+        return (
+          <Chip 
+            icon={<ScheduleIcon />} 
+            label="Non lu" 
+            color="info" 
+            size="small" 
+            variant="outlined" 
+          />
+        );
       case 'read':
-        return <Chip label="Information" color="default" size="small" />;
+        return (
+          <Chip 
+            icon={<CheckCircleIcon />} 
+            label="Lu" 
+            color="default" 
+            size="small" 
+            variant="outlined" 
+          />
+        );
       default:
-        return <Chip label="Autre" size="small" />;
+        return null;
     }
   };
   
-  // Obtenir l'icône selon le type de document
   const getDocumentIcon = (type) => {
     switch (type) {
       case 'contract':
       case 'amendment':
-        return <Description color="primary" />;
+        return <DocIcon color="primary" />;
+      case 'planning':
+        return <PdfIcon color="secondary" />;
       default:
-        return <DescriptionOutlined />;
+        return <PdfIcon color="action" />;
     }
+  };
+  
+  // Filtrer les documents en fonction de l'onglet sélectionné
+  const getFilteredDocuments = () => {
+    let filtered = [...documents];
+    
+    // Filtrer par recherche
+    if (searchQuery) {
+      filtered = filtered.filter(doc => 
+        doc.title.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    // Filtrer par onglet
+    switch (tabValue) {
+      case 0: // Tous
+        break;
+      case 1: // À signer
+        filtered = filtered.filter(doc => doc.status === 'pending');
+        break;
+      case 2: // Signés
+        filtered = filtered.filter(doc => doc.status === 'signed');
+        break;
+      case 3: // Informatifs
+        filtered = filtered.filter(doc => doc.type === 'info');
+        break;
+      default:
+        break;
+    }
+    
+    return filtered;
+  };
+  
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('fr-FR', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
   };
   
   return (
     <Box>
       <Typography variant="h4" component="h1" gutterBottom>
-        Mes Documents
+        Documents
       </Typography>
       
-      <Paper sx={{ mb: 3 }}>
-        <Tabs
-          value={filter}
-          onChange={handleFilterChange}
-          indicatorColor="primary"
-          textColor="primary"
-          variant="scrollable"
-          scrollButtons="auto"
-        >
-          <Tab label="Tous" value="all" />
-          <Tab label="Contrats" value="contract" />
-          <Tab label="Avenants" value="amendment" />
-          <Tab label="Plannings" value="planning" />
-          <Tab label="Informations" value="info" />
-        </Tabs>
-      </Paper>
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
+      )}
       
-      <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <TextField
-          placeholder="Rechercher un document..."
-          variant="outlined"
-          size="small"
-          value={searchTerm}
-          onChange={handleSearchChange}
-          sx={{ flexGrow: 1, mr: 2 }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <Search />
-              </InputAdornment>
-            ),
-          }}
-        />
+      <Paper sx={{ p: 3, mb: 3 }}>
+        {/* Barre de recherche et filtres */}
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              placeholder="Rechercher un document..."
+              value={searchQuery}
+              onChange={handleSearchChange}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon />
+                  </InputAdornment>
+                )
+              }}
+              disabled={loading}
+            />
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Button 
+              fullWidth 
+              variant="outlined" 
+              startIcon={<FilterIcon />} 
+              onClick={handleFilterClick}
+              disabled={loading}
+            >
+              Filtrer
+            </Button>
+            <Menu
+              anchorEl={filterAnchorEl}
+              open={Boolean(filterAnchorEl)}
+              onClose={handleFilterClose}
+            >
+              <MenuItem onClick={handleFilterClose}>Tous les types</MenuItem>
+              <MenuItem onClick={handleFilterClose}>Contrats</MenuItem>
+              <MenuItem onClick={handleFilterClose}>Avenants</MenuItem>
+              <MenuItem onClick={handleFilterClose}>Plannings</MenuItem>
+              <MenuItem onClick={handleFilterClose}>Informatifs</MenuItem>
+            </Menu>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Button 
+              fullWidth 
+              variant="outlined" 
+              startIcon={sortAnchorEl ? <ArrowUpwardIcon /> : <ArrowDownwardIcon />} 
+              onClick={handleSortClick}
+              disabled={loading}
+            >
+              Trier
+            </Button>
+            <Menu
+              anchorEl={sortAnchorEl}
+              open={Boolean(sortAnchorEl)}
+              onClose={handleSortClose}
+            >
+              <MenuItem onClick={handleSortClose}>Date (récent d'abord)</MenuItem>
+              <MenuItem onClick={handleSortClose}>Date (ancien d'abord)</MenuItem>
+              <MenuItem onClick={handleSortClose}>Nom (A-Z)</MenuItem>
+              <MenuItem onClick={handleSortClose}>Nom (Z-A)</MenuItem>
+              <MenuItem onClick={handleSortClose}>Statut</MenuItem>
+            </Menu>
+          </Grid>
+        </Grid>
         
-        <Button
-          startIcon={sortDirection === 'asc' ? <ArrowUpward /> : <ArrowDownward />}
-          onClick={toggleSortDirection}
-          variant="outlined"
-        >
-          Date
-        </Button>
-      </Box>
-      
-      <Paper>
-        {isLoading ? (
-          <Box display="flex" justifyContent="center" alignItems="center" height="200px">
-            <CircularProgress />
-          </Box>
-        ) : sortedDocuments.length === 0 ? (
-          <Box p={3} textAlign="center">
-            <Typography variant="body1" color="text.secondary">
-              Aucun document trouvé
-            </Typography>
+        {/* Onglets de filtrage */}
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+          <Tabs value={tabValue} onChange={handleTabChange} aria-label="filtres de documents">
+            <Tab label="Tous" id="tab-0" />
+            <Tab 
+              label="À signer" 
+              id="tab-1" 
+              icon={documents.filter(d => d.status === 'pending').length > 0 ? 
+                <Chip 
+                  label={documents.filter(d => d.status === 'pending').length} 
+                  size="small" 
+                  color="warning" 
+                /> : null
+              } 
+              iconPosition="end"
+            />
+            <Tab label="Signés" id="tab-2" />
+            <Tab label="Informatifs" id="tab-3" />
+          </Tabs>
+        </Box>
+        
+        {/* Liste des documents */}
+        {loading ? (
+          <Box>
+            {Array(3).fill().map((_, index) => (
+              <Card key={index} sx={{ mb: 2 }}>
+                <CardContent>
+                  <Skeleton variant="text" width="60%" height={30} />
+                  <Skeleton variant="text" width="40%" />
+                  <Skeleton variant="text" width="30%" />
+                </CardContent>
+                <CardActions>
+                  <Skeleton variant="rectangular" width={80} height={30} sx={{ mr: 1 }} />
+                  <Skeleton variant="rectangular" width={80} height={30} />
+                </CardActions>
+              </Card>
+            ))}
           </Box>
         ) : (
-          <List>
-            {sortedDocuments.map((document, index) => (
-              <React.Fragment key={document.id}>
-                {index > 0 && <Divider component="li" />}
-                <ListItem 
-                  button 
-                  onClick={() => handleViewDocument(document.id)}
-                >
-                  <ListItemIcon>
-                    {getDocumentIcon(document.type)}
-                  </ListItemIcon>
-                  <ListItemText 
-                    primary={document.title} 
-                    secondary={`Ajouté le ${document.date}`} 
-                  />
-                  <ListItemSecondaryAction>
-                    <Box display="flex" alignItems="center">
-                      {getStatusChip(document.status)}
-                      
-                      {document.status === 'pending' && (
-                        <Button 
-                          color="primary" 
-                          size="small" 
-                          sx={{ ml: 2 }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSignDocument(document.id);
-                          }}
+          <Box>
+            {getFilteredDocuments().length > 0 ? (
+              <List>
+                {getFilteredDocuments().map((document) => (
+                  <React.Fragment key={document.id}>
+                    <ListItem 
+                      alignItems="flex-start" 
+                      sx={{ 
+                        py: 2,
+                        backgroundColor: document.status === 'unread' ? 'rgba(3, 169, 244, 0.05)' : 'transparent'
+                      }}
+                    >
+                      <Box sx={{ pr: 2 }}>
+                        {getDocumentIcon(document.type)}
+                      </Box>
+                      <ListItemText
+                        primary={
+                          <Typography variant="h6" component="div">
+                            {document.title}
+                          </Typography>
+                        }
+                        secondary={
+                          <Box sx={{ mt: 1 }}>
+                            <Typography variant="body2" color="text.secondary" component="span">
+                              Ajouté le {formatDate(document.createdAt)} • {document.fileSize}
+                            </Typography>
+                            <Box sx={{ mt: 1 }}>
+                              {getStatusChip(document.status)}
+                              <Chip 
+                                label={document.type === 'contract' ? 'Contrat' : 
+                                      document.type === 'amendment' ? 'Avenant' : 
+                                      document.type === 'planning' ? 'Planning' : 'Informatif'} 
+                                size="small" 
+                                sx={{ ml: 1 }} 
+                              />
+                            </Box>
+                            <Box sx={{ mt: 2 }}>
+                              <Button 
+                                variant="outlined" 
+                                size="small" 
+                                onClick={() => handleViewDocument(document.id)}
+                                sx={{ mr: 1 }}
+                              >
+                                Consulter
+                              </Button>
+                              
+                              {document.status === 'pending' && (
+                                <Button 
+                                  variant="contained" 
+                                  size="small" 
+                                  color="primary" 
+                                  onClick={() => handleSignDocument(document.id)}
+                                  sx={{ mr: 1 }}
+                                >
+                                  Signer
+                                </Button>
+                              )}
+                              
+                              <Button 
+                                variant="outlined" 
+                                size="small"
+                                startIcon={<EmailIcon />}
+                                onClick={() => handleEmailDocument(document.id)}
+                              >
+                                Envoyer
+                              </Button>
+                            </Box>
+                          </Box>
+                        }
+                      />
+                      <ListItemSecondaryAction>
+                        <IconButton 
+                          edge="end" 
+                          aria-label="options"
+                          onClick={(e) => handleDocumentMenuClick(e, document.id)}
                         >
-                          Signer
-                        </Button>
-                      )}
-                      
-                      <IconButton
-                        edge="end"
-                        aria-label="more"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleMenuOpen(e, document.id);
-                        }}
-                      >
-                        <MoreVert />
-                      </IconButton>
-                    </Box>
-                  </ListItemSecondaryAction>
-                </ListItem>
-              </React.Fragment>
-            ))}
-          </List>
+                          <MoreVertIcon />
+                        </IconButton>
+                      </ListItemSecondaryAction>
+                    </ListItem>
+                    <Divider component="li" />
+                  </React.Fragment>
+                ))}
+              </List>
+            ) : (
+              <Typography variant="body1" color="text.secondary" sx={{ textAlign: 'center', my: 4 }}>
+                Aucun document trouvé.
+              </Typography>
+            )}
+          </Box>
         )}
       </Paper>
       
+      {/* Menu contextuel pour les documents */}
       <Menu
-        anchorEl={menuAnchorEl}
-        open={Boolean(menuAnchorEl)}
-        onClose={handleMenuClose}
+        anchorEl={documentMenuAnchorEl}
+        open={Boolean(documentMenuAnchorEl)}
+        onClose={handleDocumentMenuClose}
       >
-        <MenuItem onClick={() => handleViewDocument(selectedDocumentId)}>
-          <ListItemIcon>
-            <OpenInNew fontSize="small" />
-          </ListItemIcon>
-          <ListItemText primary="Voir le document" />
+        <MenuItem 
+          onClick={() => {
+            handleViewDocument(selectedDocumentId);
+            handleDocumentMenuClose();
+          }}
+        >
+          Consulter
         </MenuItem>
-        <MenuItem onClick={() => handleDownload(selectedDocumentId)}>
-          <ListItemIcon>
-            <Download fontSize="small" />
-          </ListItemIcon>
-          <ListItemText primary="Télécharger" />
+        <MenuItem 
+          onClick={() => {
+            handleEmailDocument(selectedDocumentId);
+            handleDocumentMenuClose();
+          }}
+        >
+          Envoyer par email
         </MenuItem>
-        <MenuItem onClick={() => handleSendByEmail(selectedDocumentId)}>
-          <ListItemIcon>
-            <Email fontSize="small" />
-          </ListItemIcon>
-          <ListItemText primary="Envoyer par email" />
+        <MenuItem 
+          onClick={() => {
+            alert(`Téléchargement du document ${selectedDocumentId}`);
+            handleDocumentMenuClose();
+          }}
+        >
+          Télécharger
         </MenuItem>
       </Menu>
     </Box>
