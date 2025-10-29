@@ -9,6 +9,7 @@ const authRoutes = require('./routes/auth.routes');
 const planningRoutes = require('./routes/planning.routes');
 const documentRoutes = require('./routes/document.routes');
 const userRoutes = require('./routes/user.routes');
+const temperatureRoutes = require('./routes/temperature.routes');
 
 // Initialisation de l'application Express
 const app = express();
@@ -25,6 +26,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/planning', planningRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/temperature', temperatureRoutes);
 
 // Route racine pour la santé de l'API
 app.get('/', (req, res) => {
