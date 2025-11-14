@@ -17,6 +17,7 @@ import DocumentList from './pages/documents/DocumentList';
 import DocumentDetails from './pages/documents/DocumentDetails';
 import SignDocument from './pages/documents/SignDocument';
 import ProfilePage from './pages/profile/ProfilePage';
+import SeatingPlanPage from './pages/seating/SeatingPlanPage';
 import NotFound from './pages/NotFound';
 
 // Composants du thème
@@ -130,7 +131,14 @@ function App() {
               </Layout>
             </PrivateRoute>
           } />
-          
+          <Route path="/seating-plan" element={
+            <PrivateRoute>
+              <Layout>
+                <SeatingPlanPage />
+              </Layout>
+            </PrivateRoute>
+          } />
+
           {/* Route 404 */}
           <Route path="*" element={<NotFound />} />
         </Routes>

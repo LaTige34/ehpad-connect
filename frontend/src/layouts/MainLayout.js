@@ -27,7 +27,8 @@ import {
   Description as DocumentIcon,
   AccountCircle as ProfileIcon,
   Notifications as NotificationIcon,
-  Logout as LogoutIcon
+  Logout as LogoutIcon,
+  Restaurant as RestaurantIcon
 } from '@mui/icons-material';
 
 import { logout, simulateLogout } from '../store/slices/authSlice';
@@ -70,6 +71,7 @@ const MainLayout = ({ children }) => {
     { text: 'Tableau de bord', icon: <DashboardIcon />, path: '/' },
     { text: 'Planning', icon: <CalendarIcon />, path: '/planning' },
     { text: 'Documents', icon: <DocumentIcon />, path: '/documents' },
+    { text: 'Plan de Table', icon: <RestaurantIcon />, path: '/seating-plan' },
     { text: 'Mon profil', icon: <ProfileIcon />, path: '/profile' }
   ];
   
