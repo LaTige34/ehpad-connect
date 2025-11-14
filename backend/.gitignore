@@ -1,0 +1,31 @@
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Dependencies
+node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Uploads (keep folder structure but ignore uploaded files)
+uploads/*
+!uploads/.gitkeep
+!uploads/residents/.gitkeep
+!uploads/temp/.gitkeep
+
+# Tests
+coverage/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
