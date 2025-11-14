@@ -5,10 +5,17 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const { errorHandler } = require('./middleware/errorHandler');
 const logger = require('./utils/logger');
+
+// Charger les associations entre modèles
+require('./models/associations');
+
 const authRoutes = require('./routes/auth.routes');
 const planningRoutes = require('./routes/planning.routes');
 const documentRoutes = require('./routes/document.routes');
 const userRoutes = require('./routes/user.routes');
+const residentRoutes = require('./routes/resident.routes');
+const diningTableRoutes = require('./routes/diningTable.routes');
+const seatingPlanRoutes = require('./routes/seatingPlan.routes');
 
 // Initialisation de l'application Express
 const app = express();
@@ -25,6 +32,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/planning', planningRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/residents', residentRoutes);
+app.use('/api/dining-tables', diningTableRoutes);
+app.use('/api/seating-plans', seatingPlanRoutes);
 
 // Route racine pour la santé de l'API
 app.get('/', (req, res) => {
